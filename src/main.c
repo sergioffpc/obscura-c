@@ -39,12 +39,16 @@ static void sighandler(int signum, siginfo_t *siginfo, void *context) {
 static void draw(XImage *framebuffer) {
 	ObscuraScene *scene = World.scene;
 
-	ObscuraCamera *camera = ObscuraFindComponent(scene->view, OBSCURA_SCENE_COMPONENT_TYPE_CAMERA);
+	ObscuraSceneComponent *component = ObscuraFindComponent(scene->view, OBSCURA_SCENE_COMPONENT_TYPE_CAMERA_PERSPECTIVE);
+	ObscuraCamera *camera = component->component;
 	ObscuraCameraPerspective *projection = camera->projection;
+
+	mat4 transformation = {};
+	mat4_lookat(scene->view->position, scene->view->interest, scene->view->up, transformation);
 
 	vec4 p0 = { 0, 0, 0, 1 };
 	ObscuraCollidableRay collidable = {
-		.position = mat4_transform(scene->view->transformation, p0),
+		.position = mat4_transform(transformation, p0),
 	};
 	ObscuraRendererRay ray = {
 		.type       = OBSCURA_RENDERER_RAY_TYPE_CAMERA,
@@ -65,7 +69,7 @@ static void draw(XImage *framebuffer) {
 			float pixel_camera_y = pixel_screen_y * scale;
 
 			vec4 p1 = { pixel_camera_x, pixel_camera_y, -1, 1 };
-			collidable.direction = mat4_transform(scene->view->transformation, p1);
+			collidable.direction = mat4_transform(transformation, p1);
 			collidable.direction = vec4_normalize(collidable.direction);
 
 			XPutPixel(framebuffer, x, y, ObscuraCastRay(&ray));
@@ -141,7 +145,7 @@ int main(int argc, char **argv) {
 		.sa_flags     = SA_SIGINFO,
 	};
 
-	if (sigaction(SIGSEGV, &signal_act, NULL) == -1) {
+	if (sigaction(SIGUSR1, &signal_act, NULL) == -1) {
 		fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, strerror(errno));
 		exit(EXIT_FAILURE);
 	}
@@ -226,9 +230,7 @@ int main(int argc, char **argv) {
 	shmctl(shm_info.shmid, IPC_RMID, 0);
 
 	ObscuraLoadWorld(argv[0]);
-
 	loop(display, window, framebuffer);
-
 	ObscuraUnloadWorld();
 
 	XShmDetach(display, &shm_info);

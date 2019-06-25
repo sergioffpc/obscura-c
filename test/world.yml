@@ -1,16 +1,13 @@
 ---
 nodes:
-- node: &camera0
-  components:
-  - perspective:
-      yfov: 45
-      aspect_ratio: 1.77777777778
-  - frustum:
-      znear: 0.0001
-      zfar: 1
+- &camera0
+    perspective: { yfov: 45, aspect_ratio: 1.77777777778 }
+    frustum: { znear: 0.0001, zfar: 1 }
 
-  transformation:
     position: [ 0, 0, 1 ]
-    rotation: [ 0, 0, 0 ]
-    scale: 1
+    interest: [ 0, 0, 0 ]
+    up: [ 0, 1, 0 ]
+- &geometry0
+    position: [ 0, 0, -1 ]
+
 view: *camera0

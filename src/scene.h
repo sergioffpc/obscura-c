@@ -7,10 +7,8 @@
 #include "transform.h"
 
 typedef enum ObscuraSceneComponentType {
-	OBSCURA_SCENE_COMPONENT_TYPE_CAMERA,
-	OBSCURA_SCENE_COMPONENT_TYPE_COLLIDABLE,
-	OBSCURA_SCENE_COMPONENT_TYPE_GEOMETRY,
-	OBSCURA_SCENE_COMPONENT_TYPE_LIGHT,
+	OBSCURA_SCENE_COMPONENT_TYPE_CAMERA_PERSPECTIVE,
+	OBSCURA_SCENE_COMPONENT_TYPE_COLLIDABLE_FRUSTUM,
 } ObscuraSceneComponentType;
 
 typedef struct ObscuraSceneComponent {
@@ -18,8 +16,13 @@ typedef struct ObscuraSceneComponent {
 	void				*component;
 } ObscuraSceneComponent;
 
+extern ObscuraSceneComponent *	ObscuraCreateComponent	(ObscuraSceneComponentType, ObscuraAllocationCallbacks *);
+extern void			ObscuraDestroyComponent	(ObscuraSceneComponent **, ObscuraAllocationCallbacks *);
+
 typedef struct ObscuraSceneNode {
-	mat4	transformation;
+	vec4	position;
+	vec4	interest;
+	vec4	up;
 
 	uint32_t		  components_count;
 	ObscuraSceneComponent	**components;
@@ -31,10 +34,12 @@ typedef struct ObscuraSceneNode {
 extern ObscuraSceneNode *	ObscuraCreateNode	(ObscuraAllocationCallbacks *);
 extern void			ObscuraDestroyNode	(ObscuraSceneNode **, ObscuraAllocationCallbacks *);
 
+extern ObscuraSceneNode *	ObscuraAddChild	(ObscuraSceneNode *, ObscuraAllocationCallbacks *);
+
 extern ObscuraSceneComponent *	ObscuraAddComponent	(ObscuraSceneNode *,
 							 ObscuraSceneComponentType,
 							 ObscuraAllocationCallbacks *);
-extern void *	ObscuraFindComponent	(ObscuraSceneNode *, ObscuraSceneComponentType);
+extern ObscuraSceneComponent *	ObscuraFindComponent	(ObscuraSceneNode *, ObscuraSceneComponentType);
 
 typedef struct ObscuraScene {
 	ObscuraSceneNode	*view;
