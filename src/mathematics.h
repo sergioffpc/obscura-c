@@ -1,7 +1,9 @@
-#ifndef __OBSCURA_TRANSFORM_H__
-#define __OBSCURA_TRANSFORM_H__ 1
+#ifndef __OBSCURA_MATHEMATICS_H__
+#define __OBSCURA_MATHEMATICS_H__ 1
 
 #include <immintrin.h>
+#include <math.h>
+#include <stdbool.h>
 
 /*
  * Declares the storage for a homogenous array of floating-point values.
@@ -351,6 +353,27 @@ __extern_always_inline void mat4_lookat(const vec4 eye, const vec4 interest, con
 	out[3][1] = -vec4_dot(u, eye);
 	out[3][2] =  vec4_dot(f, eye);
 	out[3][3] =  1;
+}
+
+__extern_always_inline bool quad_solver(float a, float b, float c, float *x0, float *x1) {
+	float d = b * b - 4 * a * c;
+	if (d < 0) {
+		return false;
+	} else if (d == 0) {
+		*x0 = *x1 = -0.5 * b / a;
+	} else {
+		float q = (b > 0) ? -0.5 * (b + sqrt(d)) : -0.5 * (b - sqrt(d));
+		*x0 = q / a;
+		*x1 = c / q;
+	}
+
+	if (x0 > x1) {
+		float tmp = *x0;
+		*x0 = *x1;
+		*x1 = tmp;
+	}
+
+	return true;
 }
 
 #endif

@@ -19,8 +19,10 @@ extern void		ObscuraDestroyCamera	(ObscuraCamera **, ObscuraAllocationCallbacks 
  * Describes the field of view of a perspective camera.
  */
 typedef struct ObscuraCameraPerspective {
-	float	yfov;
 	float	aspect_ratio;
+	float	yfov;
+	float	znear;
+	float	zfar;
 } ObscuraCameraPerspective;
 
 #endif

@@ -1,13 +1,15 @@
 ---
 nodes:
 - &camera0
-    perspective: { yfov: 45, aspect_ratio: 1.77777777778 }
-    frustum: { znear: 0.0001, zfar: 1 }
-
+    perspective: { aspect_ratio: 1.77777777778, yfov: 90, znear: 0.0001, zfar: 1 }
     position: [ 0, 0, 1 ]
     interest: [ 0, 0, 0 ]
     up: [ 0, 1, 0 ]
-- &geometry0
+
+-
+    sphere: { radius: 1 }
+    color: 0x9448bf
+    ball: { radius: 1 }
     position: [ 0, 0, -1 ]
 
 view: *camera0

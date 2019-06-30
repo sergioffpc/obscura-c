@@ -3,15 +3,22 @@
 
 #include <stdint.h>
 
-#include "collidable.h"
+#include "collision.h"
+#include "mathematics.h"
+#include "memory.h"
+
+typedef enum ObscuraRendererRayType {
+	OBSCURA_RENDERER_RAY_TYPE_CAMERA,
+} ObscuraRendererRayType;
 
 typedef struct ObscuraRendererRay {
-	enum {
-		OBSCURA_RENDERER_RAY_TYPE_CAMERA,
-	}	type;
-
-	ObscuraCollidableRay	*collidable;
+	ObscuraRendererRayType	 type;
+	vec4			 position;
+	ObscuraCollidable	*collidable;
 } ObscuraRendererRay;
+
+extern ObscuraRendererRay *	ObscuraCreateRendererRay	(ObscuraRendererRayType, ObscuraAllocationCallbacks *);
+extern void			ObscuraDestroyRendererRay	(ObscuraRendererRay **, ObscuraAllocationCallbacks *);
 
 extern uint32_t	ObscuraCastRay	(ObscuraRendererRay *)	__attribute__((hot));
 

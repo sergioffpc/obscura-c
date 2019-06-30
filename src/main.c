@@ -5,7 +5,6 @@
 #include <execinfo.h>
 #include <getopt.h>
 #include <libgen.h>
-#include <math.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -20,6 +19,7 @@
 #include <X11/extensions/XShm.h>
 
 #include "camera.h"
+#include "mathematics.h"
 #include "renderer.h"
 #include "scene.h"
 #include "world.h"
@@ -46,17 +46,12 @@ static void draw(XImage *framebuffer) {
 	mat4 transformation = {};
 	mat4_lookat(scene->view->position, scene->view->interest, scene->view->up, transformation);
 
-	vec4 p0 = { 0, 0, 0, 1 };
-	ObscuraCollidableRay collidable = {
-		.position = mat4_transform(transformation, p0),
-	};
-	ObscuraRendererRay ray = {
-		.type       = OBSCURA_RENDERER_RAY_TYPE_CAMERA,
-		.collidable = &collidable,
-	};
+	ObscuraRendererRay *ray = ObscuraCreateRendererRay(OBSCURA_RENDERER_RAY_TYPE_CAMERA, &World.allocator);
+	ray->position = scene->view->position;
 
-	float scale = tanf(projection->yfov * M_PI / 180);
+	float scale = tanf((projection->yfov / 2) * M_PI / 180);
 
+	ObscuraCollidableRay *collidable = ray->collidable->shape;
 	for (int y = 0; y < framebuffer->height; y++) {
 		for (int x = 0; x < framebuffer->width; x++) {
 			float pixel_ndc_x = (x + 0.5) / framebuffer->width;
@@ -68,13 +63,15 @@ static void draw(XImage *framebuffer) {
 			float pixel_camera_x = pixel_screen_x * projection->aspect_ratio * scale;
 			float pixel_camera_y = pixel_screen_y * scale;
 
-			vec4 p1 = { pixel_camera_x, pixel_camera_y, -1, 1 };
-			collidable.direction = mat4_transform(transformation, p1);
-			collidable.direction = vec4_normalize(collidable.direction);
+			vec4 p = { pixel_camera_x, pixel_camera_y, -1, 1 };
+			collidable->direction = mat4_transform(transformation, p);
+			collidable->direction = vec4_normalize(collidable->direction);
 
-			XPutPixel(framebuffer, x, y, ObscuraCastRay(&ray));
+			XPutPixel(framebuffer, x, y, ObscuraCastRay(ray));
 		}
 	}
+
+	ObscuraDestroyRendererRay(&ray, &World.allocator);
 }
 
 static void loop(Display *display, Window window, XImage *framebuffer) {
