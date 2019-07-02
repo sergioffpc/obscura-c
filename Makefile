@@ -1,6 +1,6 @@
 PROG := obscura
 
-SOURCES := camera.c collision.c geometry.c main.c material.c renderer.c scene.c world.c
+SOURCES := camera.c collision.c geometry.c light.c main.c material.c renderer.c scene.c world.c
 
 OBJDIR := build
 SRCDIR := src

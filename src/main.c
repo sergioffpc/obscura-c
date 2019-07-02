@@ -19,10 +19,14 @@
 #include <X11/extensions/XShm.h>
 
 #include "camera.h"
-#include "mathematics.h"
 #include "renderer.h"
 #include "scene.h"
+#include "tensor.h"
 #include "world.h"
+
+static ObscuraRenderer renderer = {
+	.buffer_type = OBSCURA_RENDERER_BUFFER_TYPE_COLOR,
+};
 
 static void sighandler(int signum, siginfo_t *siginfo, void *context) {
 	psiginfo(siginfo, NULL);
@@ -49,7 +53,7 @@ static void draw(XImage *framebuffer) {
 	ObscuraRendererRay *ray = ObscuraCreateRendererRay(OBSCURA_RENDERER_RAY_TYPE_CAMERA, &World.allocator);
 	ray->position = scene->view->position;
 
-	float scale = tanf((projection->yfov / 2) * M_PI / 180);
+	float scale = tanf(DEG2RADF(projection->yfov / 2));
 
 	ObscuraCollidableRay *collidable = ray->collidable->shape;
 	for (int y = 0; y < framebuffer->height; y++) {
@@ -67,7 +71,7 @@ static void draw(XImage *framebuffer) {
 			collidable->direction = mat4_transform(transformation, p);
 			collidable->direction = vec4_normalize(collidable->direction);
 
-			XPutPixel(framebuffer, x, y, ObscuraCastRay(ray));
+			XPutPixel(framebuffer, x, y, ObscuraCastRay(&renderer, ray));
 		}
 	}
 
@@ -97,6 +101,12 @@ static void loop(Display *display, Window window, XImage *framebuffer) {
 			case KeyPress:
 				if (XLookupKeysym(&event.xkey, 0) == XK_Escape) {
 					running = false;
+				} else if (XLookupKeysym(&event.xkey, 0) == XK_c) {
+					renderer.buffer_type = OBSCURA_RENDERER_BUFFER_TYPE_COLOR;
+				} else if (XLookupKeysym(&event.xkey, 0) == XK_d) {
+					renderer.buffer_type = OBSCURA_RENDERER_BUFFER_TYPE_DEPTH;
+				} else if (XLookupKeysym(&event.xkey, 0) == XK_n) {
+					renderer.buffer_type = OBSCURA_RENDERER_BUFFER_TYPE_NORMAL;
 				}
 				break;
 			case KeyRelease:

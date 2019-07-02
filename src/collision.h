@@ -3,8 +3,8 @@
 
 #include <stdbool.h>
 
-#include "mathematics.h"
 #include "memory.h"
+#include "tensor.h"
 
 typedef enum ObscuraCollidableShapeType {
 	OBSCURA_COLLIDABLE_SHAPE_TYPE_BALL,

@@ -85,7 +85,7 @@ static struct parser_state {
 static int8_t	evpointer    = -1;
 
 static struct parser_anchor {
-	char	name[256];
+	char	*name;
 	void	*ptr;
 }		anchors[256] = {};
 static int8_t	anchoridx    = -1;
@@ -121,7 +121,8 @@ static void nodes_scalar_event(yaml_event_t *event) {
 
 	if (event->data.scalar.anchor != NULL) {
 		anchoridx++;
-		strcpy(anchors[anchoridx].name, (char *) event->data.scalar.anchor);
+		strcpy(node->name, (char *) event->data.scalar.anchor);
+		anchors[anchoridx].name = node->name;
 		anchors[anchoridx].ptr = evstack[evpointer].ptr;
 	}
 }

@@ -5,11 +5,15 @@ nodes:
     position: [ 0, 0, 1 ]
     interest: [ 0, 0, 0 ]
     up: [ 0, 1, 0 ]
-
--
+- &sphere0
     sphere: { radius: 1 }
-    color: [ 0.32, 0.32, 0.32 ]
+    color: [ 0, 0, 1 ]
     ball: { radius: 1 }
     position: [ 0, 0, -1 ]
+- &sphere1
+    sphere: { radius: 1 }
+    color: [ 0, 1, 0 ]
+    ball: { radius: 1 }
+    position: [ 0.3, 0.3, -1.2 ]
 
 view: *camera0

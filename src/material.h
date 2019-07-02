@@ -3,8 +3,8 @@
 
 #include <stdint.h>
 
-#include "mathematics.h"
 #include "memory.h"
+#include "tensor.h"
 
 typedef enum ObscuraMaterialType {
 	OBSCURA_MATERIAL_TYPE_COLOR,

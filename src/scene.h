@@ -33,6 +33,8 @@ extern ObscuraSceneComponent *	ObscuraCreateComponent	(ObscuraSceneComponentType
 extern void			ObscuraDestroyComponent	(ObscuraSceneComponent **, ObscuraAllocationCallbacks *);
 
 typedef struct ObscuraSceneNode {
+	char	name[256];
+
 	vec4	position;
 	vec4	interest;
 	vec4	up;

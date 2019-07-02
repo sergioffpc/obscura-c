@@ -4,8 +4,18 @@
 #include <stdint.h>
 
 #include "collision.h"
-#include "mathematics.h"
 #include "memory.h"
+#include "tensor.h"
+
+typedef enum ObscuraRendererBufferType {
+	OBSCURA_RENDERER_BUFFER_TYPE_COLOR,
+	OBSCURA_RENDERER_BUFFER_TYPE_DEPTH,
+	OBSCURA_RENDERER_BUFFER_TYPE_NORMAL,
+} ObscuraRendererBufferType;
+
+typedef struct ObscuraRenderer {
+	ObscuraRendererBufferType	buffer_type;
+} ObscuraRenderer;
 
 typedef enum ObscuraRendererRayType {
 	OBSCURA_RENDERER_RAY_TYPE_CAMERA,
@@ -20,6 +30,6 @@ typedef struct ObscuraRendererRay {
 extern ObscuraRendererRay *	ObscuraCreateRendererRay	(ObscuraRendererRayType, ObscuraAllocationCallbacks *);
 extern void			ObscuraDestroyRendererRay	(ObscuraRendererRay **, ObscuraAllocationCallbacks *);
 
-extern uint32_t	ObscuraCastRay	(ObscuraRendererRay *)	__attribute__((hot));
+extern uint32_t	ObscuraCastRay	(ObscuraRenderer *, ObscuraRendererRay *)	__attribute__((hot));
 
 #endif
