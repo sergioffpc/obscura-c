@@ -20,20 +20,22 @@ struct collisions {
 };
 
 static void find_collisions(ObscuraSceneNode *node, void *arg) {
-	struct collisions *collisions = arg;
+	if (ObscuraFindComponent(node, OBSCURA_SCENE_COMPONENT_FAMILY_GEOMETRY) != NULL) {
+		struct collisions *collisions = arg;
 
-	ObscuraRendererRay *ray = collisions->ray;
+		ObscuraRendererRay *ray = collisions->ray;
 
-	ObscuraSceneComponent *component = ObscuraFindComponent(node, OBSCURA_SCENE_COMPONENT_FAMILY_COLLIDABLE);
-	ObscuraCollidable *collidable = component->component;
+		ObscuraSceneComponent *component = ObscuraFindComponent(node, OBSCURA_SCENE_COMPONENT_FAMILY_COLLIDABLE);
+		ObscuraCollidable *collidable = component->component;
 
-	ObscuraCollision collision;
-	ObscuraCollidesWith(ray->collidable, ray->position, collidable, node->position, &collision);
-	if (collision.hit) {
-		int i = collisions->objects_count++;
+		ObscuraCollision collision;
+		ObscuraCollidesWith(ray->collidable, ray->position, collidable, node->position, &collision);
+		if (collision.hit) {
+			int i = collisions->objects_count++;
 
-		collisions->objects[i].node = node;
-		collisions->objects[i].zhit = collision.hit_point[2];
+			collisions->objects[i].node = node;
+			collisions->objects[i].zhit = collision.hit_point[2];
+		}
 	}
 }
 
@@ -53,7 +55,7 @@ void ObscuraDestroyRendererRay(ObscuraRendererRay **ptr, ObscuraAllocationCallba
 }
 
 uint32_t ObscuraCastRay(ObscuraRendererRay *ray) {
-	uint32_t color = 0xff;
+	vec4 color = { 0.16, 0.16, 0.16 };
 
 	struct collisions collisions = {
 		.objects       = {},
@@ -87,5 +89,5 @@ uint32_t ObscuraCastRay(ObscuraRendererRay *ray) {
 		}
 	}
 
-	return color;
+	return OBSCURA_COLOR2UINT32(color);
 }

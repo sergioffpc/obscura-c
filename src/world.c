@@ -71,7 +71,6 @@ ObscuraWorld World = {
 static struct parser_state {
 	enum {
 		PARSER_STATE_TYPE_BALL,
-		PARSER_STATE_TYPE_COLOR,
 		PARSER_STATE_TYPE_FLOAT,
 		PARSER_STATE_TYPE_NODE,
 		PARSER_STATE_TYPE_NODES,
@@ -79,7 +78,6 @@ static struct parser_state {
 		PARSER_STATE_TYPE_REF,
 		PARSER_STATE_TYPE_SCENE,
 		PARSER_STATE_TYPE_SPHERE,
-		PARSER_STATE_TYPE_UINT32,
 		PARSER_STATE_TYPE_VECTOR3,
 	}	 type;
 	void	*ptr;
@@ -162,8 +160,10 @@ static void node_scalar_event(yaml_event_t *event) {
 			&World.allocator);
 		assert(material);
 
-		evstack[evpointer].type = PARSER_STATE_TYPE_COLOR;
-		evstack[evpointer].ptr  = material->component;
+		ObscuraMaterial *color = material->component;
+
+		evstack[evpointer].type = PARSER_STATE_TYPE_VECTOR3;
+		evstack[evpointer].ptr  = &((ObscuraMaterialColor *) color->material)->color;
 	} else if (!strcmp((char *) event->data.scalar.value, "position")) {
 		evstack[evpointer].type = PARSER_STATE_TYPE_VECTOR3;
 		evstack[evpointer].ptr  = &node->position;
@@ -230,18 +230,6 @@ static void ball_scalar_event(yaml_event_t *event) {
 }
 
 static void ball_end_event(yaml_event_t *event) {
-	evpointer--;
-}
-
-static void color_scalar_event(yaml_event_t *event) {
-	ObscuraMaterial *material = evstack[evpointer].ptr;
-
-	evpointer++;
-	evstack[evpointer].type = PARSER_STATE_TYPE_UINT32;
-	evstack[evpointer].ptr  = &((ObscuraMaterialColor *) material->material)->color;
-}
-
-static void color_end_event(yaml_event_t *event) {
 	evpointer--;
 }
 
@@ -351,18 +339,6 @@ void ObscuraLoadWorld(const char *filename) {
 				break;
 			}
 			break;
-		case PARSER_STATE_TYPE_COLOR:
-			switch (event.type) {
-			case YAML_SCALAR_EVENT:
-				color_scalar_event(&event);
-				break;
-			case YAML_MAPPING_END_EVENT:
-				color_end_event(&event);
-				break;
-			default:
-				break;
-			}
-			break;
 		case PARSER_STATE_TYPE_SPHERE:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
@@ -385,22 +361,14 @@ void ObscuraLoadWorld(const char *filename) {
 				break;
 			}
 			break;
-		case PARSER_STATE_TYPE_UINT32:
-			switch (event.type) {
-			case YAML_SCALAR_EVENT:
-				*((uint32_t *) evstack[evpointer].ptr) = atol((char *) event.data.scalar.value);
-				evpointer--;
-				break;
-			default:
-				break;
-			}
-			break;
 		case PARSER_STATE_TYPE_VECTOR3:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				*((float *) evstack[evpointer].ptr++) = atof((char *) event.data.scalar.value);
+				*((float *) evstack[evpointer].ptr) = atof((char *) event.data.scalar.value);
+				evstack[evpointer].ptr += sizeof(float);
 				break;
 			case YAML_SEQUENCE_END_EVENT:
+				*((float *) evstack[evpointer].ptr) = 1;
 				evpointer--;
 				break;
 			default:

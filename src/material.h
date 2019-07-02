@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+#include "mathematics.h"
 #include "memory.h"
 
 typedef enum ObscuraMaterialType {
@@ -17,9 +18,11 @@ typedef struct ObscuraMaterial {
 extern ObscuraMaterial *	ObscuraCreateMaterial(ObscuraMaterialType, ObscuraAllocationCallbacks *);
 extern void			ObscuraDestroyMaterial(ObscuraMaterial **, ObscuraAllocationCallbacks *);
 
-typedef union ObscuraMaterialColor {
-	struct { float r, g, b, a; };
-	uint32_t	color;
+typedef struct ObscuraMaterialColor {
+	vec4	color;
 } ObscuraMaterialColor;
+
+#define OBSCURA_COLOR2UINT32(c)	\
+	(((uint32_t) (((int) ((c)[0] * 255) & 0xff) << 16) | (((int) ((c)[1] * 255) & 0xff) << 8) | ((int) ((c)[2] * 255) & 0xff)))
 
 #endif

@@ -8,7 +8,7 @@ nodes:
 
 -
     sphere: { radius: 1 }
-    color: 0x9448bf
+    color: [ 0.32, 0.32, 0.32 ]
     ball: { radius: 1 }
     position: [ 0, 0, -1 ]
 

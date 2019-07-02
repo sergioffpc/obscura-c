@@ -32,7 +32,7 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.c
 
 .PHONY: clean
 clean:
-	@$(RM) -r $(OBJDIR)/*
+	@$(RM) -r $(OBJDIR)
 
 .PHONY: distclean
 distclean: clean

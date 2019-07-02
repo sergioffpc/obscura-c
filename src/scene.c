@@ -126,7 +126,7 @@ ObscuraSceneComponent *ObscuraAddComponent(ObscuraSceneNode *node,
 ObscuraSceneComponent *ObscuraFindComponent(ObscuraSceneNode *node, ObscuraSceneComponentFamily family) {
 	for (uint32_t i = 0; i < node->components_count; i++) {
 		ObscuraSceneComponent *component = node->components[i];
-		if (component->type | family) {
+		if (component->type & family) {
 			return component;
 		}
 	}
