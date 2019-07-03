@@ -1,19 +1,23 @@
 #ifndef __OBSCURA_LIGHT_H__
 #define __OBSCURA_LIGHT_H__ 1
 
+#include "memory.h"
 #include "tensor.h"
 
-typedef enum ObscuraLightType {
-	OBSCURA_LIGHT_TYPE_AMBIENT,
-	OBSCURA_LIGHT_TYPE_DIRECTIONAL,
-	OBSCURA_LIGHT_TYPE_POINT,
-	OBSCURA_LIGHT_TYPE_SPOT,
-} ObscuraLightType;
+typedef enum ObscuraLightSourceType {
+	OBSCURA_LIGHT_SOURCE_TYPE_AMBIENT,
+	OBSCURA_LIGHT_SOURCE_TYPE_DIRECTIONAL,
+	OBSCURA_LIGHT_SOURCE_TYPE_POINT,
+	OBSCURA_LIGHT_SOURCE_TYPE_SPOT,
+} ObscuraLightSourceType;
 
 typedef struct ObscuraLight {
-	ObscuraLightType	 type;
-	void			*light;
+	ObscuraLightSourceType	 type;
+	void			*source;
 } ObscuraLight;
+
+extern ObscuraLight *	ObscuraCreateLight	(ObscuraLightSourceType, ObscuraAllocationCallbacks *);
+extern void		ObscuraDestroyLight	(ObscuraLight **, ObscuraAllocationCallbacks *);
 
 /*
  * The ambient element declares the parameters required to describe an ambient light source. An

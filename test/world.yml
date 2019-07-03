@@ -1,19 +1,22 @@
 ---
 nodes:
 - &camera0
-    perspective: { aspect_ratio: 1.77777777778, yfov: 90, znear: 0.0001, zfar: 1 }
+    camera: { perspective: { aspect_ratio: 1.77777777778, yfov: 90, znear: 0.0001, zfar: 1 } }
     position: [ 0, 0, 1 ]
     interest: [ 0, 0, 0 ]
     up: [ 0, 1, 0 ]
 - &sphere0
-    sphere: { radius: 1 }
-    color: [ 0, 0, 1 ]
-    ball: { radius: 1 }
+    geometry: { sphere: { radius: 1 } }
+    material: { color: [ 0, 0, 1 ] }
+    collision: { ball: { radius: 1 } }
     position: [ 0, 0, -1 ]
 - &sphere1
-    sphere: { radius: 1 }
-    color: [ 0, 1, 0 ]
-    ball: { radius: 1 }
+    geometry: { sphere: { radius: 1 } }
+    material: { color: [ 0, 1, 0 ] }
+    collision: { ball: { radius: 1 } }
     position: [ 0.3, 0.3, -1.2 ]
+- &light0
+    light: { point: { color: [ 1, 1, 0 ], constant_attenuation: 1, linear_attenuation: 0, quadratic_attenuation: 0 } }
+    position: [ 0, 0, 0 ]
 
 view: *camera0

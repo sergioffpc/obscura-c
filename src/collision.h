@@ -9,6 +9,7 @@
 typedef enum ObscuraCollidableShapeType {
 	OBSCURA_COLLIDABLE_SHAPE_TYPE_BALL,
 	OBSCURA_COLLIDABLE_SHAPE_TYPE_BOX,
+	OBSCURA_COLLIDABLE_SHAPE_TYPE_CONE,
 	OBSCURA_COLLIDABLE_SHAPE_TYPE_FRUSTUM,
 	OBSCURA_COLLIDABLE_SHAPE_TYPE_RAY,
 } ObscuraCollidableShapeType;
@@ -37,10 +38,13 @@ typedef struct ObscuraCollidableBall {
 } ObscuraCollidableBall;
 
 typedef struct ObscuraCollidableBox {
-	float	width;
-	float	height;
-	float	depth;
+	vec4	half_extents;
 } ObscuraCollidableBox;
+
+typedef struct ObscuraCollidableCone {
+	float	height;
+	float	radius;
+} ObscuraCollidableCone;
 
 typedef struct ObscuraCollidableFrustum {
 	float	bottom;

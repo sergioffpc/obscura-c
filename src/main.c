@@ -28,7 +28,7 @@ static ObscuraRenderer renderer = {
 	.buffer_type = OBSCURA_RENDERER_BUFFER_TYPE_COLOR,
 };
 
-static void sighandler(int signum, siginfo_t *siginfo, void *context) {
+static void sighandler(int signum __attribute__((unused)), siginfo_t *siginfo, void *context __attribute__((unused))) {
 	psiginfo(siginfo, NULL);
 
 	void *buffer[255] = {};

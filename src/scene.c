@@ -1,6 +1,7 @@
 #include "camera.h"
 #include "collision.h"
 #include "geometry.h"
+#include "light.h"
 #include "material.h"
 #include "scene.h"
 
@@ -21,17 +22,42 @@ ObscuraSceneComponent *ObscuraCreateComponent(ObscuraSceneComponentType type, Ob
 	case OBSCURA_SCENE_COMPONENT_TYPE_CAMERA_PERSPECTIVE:
 		component->component = ObscuraCreateCamera(OBSCURA_CAMERA_PROJECTION_TYPE_PERSPECTIVE, allocator);
 		break;
-	case OBSCURA_SCENE_COMPONENT_TYPE_COLLIDABLE_FRUSTUM:
-		component->component = ObscuraCreateCollidable(OBSCURA_COLLIDABLE_SHAPE_TYPE_FRUSTUM, allocator);
-		break;
+
 	case OBSCURA_SCENE_COMPONENT_TYPE_COLLIDABLE_BALL:
 		component->component = ObscuraCreateCollidable(OBSCURA_COLLIDABLE_SHAPE_TYPE_BALL, allocator);
 		break;
+	case OBSCURA_SCENE_COMPONENT_TYPE_COLLIDABLE_BOX:
+		component->component = ObscuraCreateCollidable(OBSCURA_COLLIDABLE_SHAPE_TYPE_BOX, allocator);
+		break;
+	case OBSCURA_SCENE_COMPONENT_TYPE_COLLIDABLE_CONE:
+		component->component = ObscuraCreateCollidable(OBSCURA_COLLIDABLE_SHAPE_TYPE_CONE, allocator);
+		break;
+	case OBSCURA_SCENE_COMPONENT_TYPE_COLLIDABLE_FRUSTUM:
+		component->component = ObscuraCreateCollidable(OBSCURA_COLLIDABLE_SHAPE_TYPE_FRUSTUM, allocator);
+		break;
+	case OBSCURA_SCENE_COMPONENT_TYPE_COLLIDABLE_RAY:
+		component->component = ObscuraCreateCollidable(OBSCURA_COLLIDABLE_SHAPE_TYPE_RAY, allocator);
+		break;
+
 	case OBSCURA_SCENE_COMPONENT_TYPE_GEOMETRY_SPHERE:
 		component->component = ObscuraCreateGeometry(OBSCURA_GEOMETRY_TYPE_PARAMETRIC_SPHERE, allocator);
 		break;
+
 	case OBSCURA_SCENE_COMPONENT_TYPE_MATERIAL_COLOR:
 		component->component = ObscuraCreateMaterial(OBSCURA_MATERIAL_TYPE_COLOR, allocator);
+		break;
+
+	case OBSCURA_SCENE_COMPONENT_TYPE_LIGHT_AMBIENT:
+		component->component = ObscuraCreateLight(OBSCURA_LIGHT_SOURCE_TYPE_AMBIENT, allocator);
+		break;
+	case OBSCURA_SCENE_COMPONENT_TYPE_LIGHT_DIRECTIONAL:
+		component->component = ObscuraCreateLight(OBSCURA_LIGHT_SOURCE_TYPE_DIRECTIONAL, allocator);
+		break;
+	case OBSCURA_SCENE_COMPONENT_TYPE_LIGHT_POINT:
+		component->component = ObscuraCreateLight(OBSCURA_LIGHT_SOURCE_TYPE_POINT, allocator);
+		break;
+	case OBSCURA_SCENE_COMPONENT_TYPE_LIGHT_SPOT:
+		component->component = ObscuraCreateLight(OBSCURA_LIGHT_SOURCE_TYPE_SPOT, allocator);
 		break;
 	}
 
@@ -45,15 +71,28 @@ void ObscuraDestroyComponent(ObscuraSceneComponent **ptr, ObscuraAllocationCallb
 		case OBSCURA_SCENE_COMPONENT_TYPE_CAMERA_PERSPECTIVE:
 			ObscuraDestroyCamera((ObscuraCamera **) &component->component, allocator);
 			break;
-		case OBSCURA_SCENE_COMPONENT_TYPE_COLLIDABLE_FRUSTUM:
+
 		case OBSCURA_SCENE_COMPONENT_TYPE_COLLIDABLE_BALL:
+		case OBSCURA_SCENE_COMPONENT_TYPE_COLLIDABLE_BOX:
+		case OBSCURA_SCENE_COMPONENT_TYPE_COLLIDABLE_CONE:
+		case OBSCURA_SCENE_COMPONENT_TYPE_COLLIDABLE_FRUSTUM:
+		case OBSCURA_SCENE_COMPONENT_TYPE_COLLIDABLE_RAY:
 			ObscuraDestroyCollidable((ObscuraCollidable **) &component->component, allocator);
 			break;
+
 		case OBSCURA_SCENE_COMPONENT_TYPE_GEOMETRY_SPHERE:
 			ObscuraDestroyGeometry((ObscuraGeometry **) &component->component, allocator);
 			break;
+
 		case OBSCURA_SCENE_COMPONENT_TYPE_MATERIAL_COLOR:
 			ObscuraDestroyMaterial((ObscuraMaterial **) &component->component, allocator);
+			break;
+
+		case OBSCURA_SCENE_COMPONENT_TYPE_LIGHT_AMBIENT:
+		case OBSCURA_SCENE_COMPONENT_TYPE_LIGHT_DIRECTIONAL:
+		case OBSCURA_SCENE_COMPONENT_TYPE_LIGHT_POINT:
+		case OBSCURA_SCENE_COMPONENT_TYPE_LIGHT_SPOT:
+			ObscuraDestroyLight((ObscuraLight **) &component->component, allocator);
 			break;
 		}
 		allocator->free(component);
