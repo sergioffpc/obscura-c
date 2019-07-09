@@ -1,22 +1,79 @@
 ---
-nodes:
+###############################################################################
+# Provides a library in which to place camera elements.
+###############################################################################
+cameras:
 - &camera0
-    camera: { perspective: { aspect_ratio: 1.77777777778, yfov: 90, znear: 0.0001, zfar: 1 } }
-    position: [ 0, 0, 1 ]
-    interest: [ 0, 0, 0 ]
-    up: [ 0, 1, 0 ]
-- &sphere0
-    geometry: { sphere: { radius: 1 } }
-    material: { color: [ 0, 0, 1 ] }
-    collision: { ball: { radius: 1 } }
-    position: [ 0, 0, -1 ]
-- &sphere1
-    geometry: { sphere: { radius: 1 } }
-    material: { color: [ 0, 1, 0 ] }
-    collision: { ball: { radius: 1 } }
-    position: [ 0.3, 0.3, -1.2 ]
-- &light0
-    light: { point: { color: [ 1, 1, 0 ], constant_attenuation: 1, linear_attenuation: 0, quadratic_attenuation: 0 } }
-    position: [ 0, 0, 0 ]
+    perspective:
+      aspect_ratio: 1.77777777778
+      yfov: 90
+      znear: 0.0001
+      zfar: 1
+    # The anti-aliasing technique element must contain one of:
+    #   0 - disable the use of anti-aliasing
+    #   1 - enable the use of supersampling spatial anti-aliasing (SSAA)
+    #       technique with stochastic sampling method.
+    anti_aliasing:
+      technique: 1
+      samples_count: 4
 
-view: *camera0
+
+###############################################################################
+# Provides a library in which to place bounding volume elements.
+###############################################################################
+bounding_volumes:
+- &ball0
+    ball: { radius: 1 }
+
+
+###############################################################################
+# Provides a library for the storage of material assets.
+###############################################################################
+materials:
+- &material0
+    color: { r: 1 }
+- &material1
+    color: { g: 1 }
+
+
+###############################################################################
+# Provides a library in which to place geometry elements.
+###############################################################################
+geometries:
+- &sphere0
+    sphere: { radius: 1 }
+
+
+###############################################################################
+# Provides a library in which to place light elements.
+###############################################################################
+lights:
+- &light0
+    point:
+      color: { r: 1, g: 1 }
+      constant_attenuation: 1
+      linear_attenuation: 0
+      quadratic_attenuation: 0
+
+
+###############################################################################
+# Provides a library in which to place node elements.
+###############################################################################
+nodes:
+- &camera_node0
+    components: [ *camera0 ]
+    position: { z: 1 }
+    up: { y: 1 }
+-
+    components: [ *sphere0, *material0, *ball0 ]
+    position: { z: -1 }
+-
+    components: [ *sphere0, *material1, *ball0 ]
+    position: { x: 0.3, y: 0.3, z: -1.2 }
+
+
+###############################################################################
+# Refers to a node that contains a camera describing the viewpoint from which
+# to render.
+###############################################################################
+view: *camera_node0
