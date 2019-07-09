@@ -6,6 +6,10 @@
 #include "memory.h"
 #include "tensor.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum ObscuraMaterialType {
 	OBSCURA_MATERIAL_TYPE_COLOR,
 } ObscuraMaterialType;
@@ -15,14 +19,17 @@ typedef struct ObscuraMaterial {
 	void			*material;
 } ObscuraMaterial;
 
-extern ObscuraMaterial *	ObscuraCreateMaterial(ObscuraMaterialType, ObscuraAllocationCallbacks *);
+extern ObscuraMaterial *	ObscuraCreateMaterial(ObscuraAllocationCallbacks *);
 extern void			ObscuraDestroyMaterial(ObscuraMaterial **, ObscuraAllocationCallbacks *);
+
+extern ObscuraMaterial *	ObscuraBindMaterial(ObscuraMaterial *, ObscuraMaterialType, ObscuraAllocationCallbacks *);
 
 typedef struct ObscuraMaterialColor {
 	vec4	color;
 } ObscuraMaterialColor;
 
-#define OBSCURA_COLOR2UINT32(c)	\
-	(((uint32_t) (((int) ((c)[0] * 255) & 0xff) << 16) | (((int) ((c)[1] * 255) & 0xff) << 8) | ((int) ((c)[2] * 255) & 0xff)))
+#ifdef __cplusplus
+}
+#endif
 
 #endif

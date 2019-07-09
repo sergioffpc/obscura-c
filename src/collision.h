@@ -6,21 +6,28 @@
 #include "memory.h"
 #include "tensor.h"
 
-typedef enum ObscuraCollidableShapeType {
-	OBSCURA_COLLIDABLE_SHAPE_TYPE_BALL,
-	OBSCURA_COLLIDABLE_SHAPE_TYPE_BOX,
-	OBSCURA_COLLIDABLE_SHAPE_TYPE_CONE,
-	OBSCURA_COLLIDABLE_SHAPE_TYPE_FRUSTUM,
-	OBSCURA_COLLIDABLE_SHAPE_TYPE_RAY,
-} ObscuraCollidableShapeType;
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-typedef struct ObscuraCollidable {
-	ObscuraCollidableShapeType	 type;
-	void				*shape;
-} ObscuraCollidable;
+typedef enum ObscuraBoundingVolumeType {
+	OBSCURA_BOUNDING_VOLUME_TYPE_BALL,
+	OBSCURA_BOUNDING_VOLUME_TYPE_BOX,
+	OBSCURA_BOUNDING_VOLUME_TYPE_CONE,
+	OBSCURA_BOUNDING_VOLUME_TYPE_FRUSTUM,
+	OBSCURA_BOUNDING_VOLUME_TYPE_RAY,
+} ObscuraBoundingVolumeType;
 
-extern ObscuraCollidable *	ObscuraCreateCollidable		(ObscuraCollidableShapeType, ObscuraAllocationCallbacks *);
-extern void			ObscuraDestroyCollidable	(ObscuraCollidable **, ObscuraAllocationCallbacks *);
+typedef struct ObscuraBoundingVolume {
+	ObscuraBoundingVolumeType	 type;
+	void				*volume;
+} ObscuraBoundingVolume;
+
+extern ObscuraBoundingVolume *	ObscuraCreateBoundingVolume	(ObscuraAllocationCallbacks *);
+extern void			ObscuraDestroyBoundingVolume	(ObscuraBoundingVolume **, ObscuraAllocationCallbacks *);
+
+extern ObscuraBoundingVolume *	ObscuraBindBoundingVolume	(ObscuraBoundingVolume *, ObscuraBoundingVolumeType,
+	ObscuraAllocationCallbacks *);
 
 typedef struct ObscuraCollision {
 	bool	hit;
@@ -31,32 +38,36 @@ typedef struct ObscuraCollision {
 extern ObscuraCollision *	ObscuraCreateCollision	(ObscuraAllocationCallbacks *);
 extern void			ObscuraDestroyCollision	(ObscuraCollision **, ObscuraAllocationCallbacks *);
 
-extern void	ObscuraCollidesWith	(ObscuraCollidable *, vec4, ObscuraCollidable *, vec4, ObscuraCollision *);
+extern void	ObscuraCollidesWith	(ObscuraBoundingVolume *, vec4, ObscuraBoundingVolume *, vec4, ObscuraCollision *);
 
-typedef struct ObscuraCollidableBall {
+typedef struct ObscuraBoundingVolumeBall {
 	float	radius;
-} ObscuraCollidableBall;
+} ObscuraBoundingVolumeBall;
 
-typedef struct ObscuraCollidableBox {
+typedef struct ObscuraBoundingVolumeBox {
 	vec4	half_extents;
-} ObscuraCollidableBox;
+} ObscuraBoundingVolumeBox;
 
-typedef struct ObscuraCollidableCone {
+typedef struct ObscuraBoundingVolumeCone {
 	float	height;
 	float	radius;
-} ObscuraCollidableCone;
+} ObscuraBoundingVolumeCone;
 
-typedef struct ObscuraCollidableFrustum {
+typedef struct ObscuraBoundingVolumeFrustum {
 	float	bottom;
 	float	left;
 	float	right;
 	float	top;
 	float	near;
 	float	far;
-} ObscuraCollidableFrustum;
+} ObscuraBoundingVolumeFrustum;
 
-typedef struct ObscuraCollidableRay {
+typedef struct ObscuraBoundingVolumeRay {
 	vec4	direction;
-} ObscuraCollidableRay;
+} ObscuraBoundingVolumeRay;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

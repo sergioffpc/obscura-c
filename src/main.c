@@ -24,11 +24,12 @@
 #include "tensor.h"
 #include "world.h"
 
-static ObscuraRenderer renderer = {
-	.buffer_type = OBSCURA_RENDERER_BUFFER_TYPE_COLOR,
-};
+#define COLOR2UINT32(c) \
+        (((uint32_t) (((int) ((c)[0] * 255) & 0xff) << 16) | (((int) ((c)[1] * 255) & 0xff) << 8) | ((int) ((c)[2] * 255) & 0xff)))
 
-static void sighandler(int signum __attribute__((unused)), siginfo_t *siginfo, void *context __attribute__((unused))) {
+static void
+sighandler(int signum __attribute__((unused)), siginfo_t *siginfo, void *context __attribute__((unused)))
+{
 	psiginfo(siginfo, NULL);
 
 	void *buffer[255] = {};
@@ -40,45 +41,85 @@ static void sighandler(int signum __attribute__((unused)), siginfo_t *siginfo, v
 	_exit(EXIT_FAILURE);
 }
 
-static void draw(XImage *framebuffer) {
+static vec4
+castray(float pixel_ndc_x, float pixel_ndc_y)
+{
 	ObscuraScene *scene = World.scene;
+	ObscuraComponent *component = ObscuraFindComponent(scene->view, OBSCURA_COMPONENT_FAMILY_CAMERA,
+		OBSCURA_CAMERA_PROJECTION_TYPE_PERSPECTIVE);
 
-	ObscuraSceneComponent *component = ObscuraFindComponent(scene->view, OBSCURA_SCENE_COMPONENT_TYPE_CAMERA_PERSPECTIVE);
 	ObscuraCamera *camera = component->component;
 	ObscuraCameraPerspective *projection = camera->projection;
 
 	mat4 transformation = {};
 	mat4_lookat(scene->view->position, scene->view->interest, scene->view->up, transformation);
 
-	ObscuraRendererRay *ray = ObscuraCreateRendererRay(OBSCURA_RENDERER_RAY_TYPE_CAMERA, &World.allocator);
-	ray->position = scene->view->position;
+	float pixel_screen_x = 2 * pixel_ndc_x - 1;
+	float pixel_screen_y = 1 - 2 * pixel_ndc_y;
 
 	float scale = tanf(DEG2RADF(projection->yfov / 2));
+	float pixel_camera_x = pixel_screen_x * projection->aspect_ratio * scale;
+	float pixel_camera_y = pixel_screen_y * scale;
 
-	ObscuraCollidableRay *collidable = ray->collidable->shape;
-	for (int y = 0; y < framebuffer->height; y++) {
-		for (int x = 0; x < framebuffer->width; x++) {
-			float pixel_ndc_x = (x + 0.5) / framebuffer->width;
-			float pixel_ndc_y = (y + 0.5) / framebuffer->height;
+	vec4 p = { pixel_camera_x, pixel_camera_y, -1, 1 };
 
-			float pixel_screen_x = 2 * pixel_ndc_x - 1;
-			float pixel_screen_y = 1 - 2 * pixel_ndc_y;
+	ObscuraBoundingVolumeRay bounds = {
+		.direction = mat4_transform(transformation, p),
+	};
+	bounds.direction = vec4_normalize(bounds.direction);
 
-			float pixel_camera_x = pixel_screen_x * projection->aspect_ratio * scale;
-			float pixel_camera_y = pixel_screen_y * scale;
+	ObscuraBoundingVolume volume = {
+		.type   = OBSCURA_BOUNDING_VOLUME_TYPE_RAY,
+		.volume = &bounds,
+	};
+	ObscuraRendererRay ray = {
+		.type     = OBSCURA_RENDERER_RAY_TYPE_CAMERA,
+		.position = World.scene->view->position,
+		.volume   = &volume,
+	};
 
-			vec4 p = { pixel_camera_x, pixel_camera_y, -1, 1 };
-			collidable->direction = mat4_transform(transformation, p);
-			collidable->direction = vec4_normalize(collidable->direction);
-
-			XPutPixel(framebuffer, x, y, ObscuraCastRay(&renderer, ray));
-		}
-	}
-
-	ObscuraDestroyRendererRay(&ray, &World.allocator);
+	return ObscuraCastRay(&ray);
 }
 
-static void loop(Display *display, Window window, XImage *framebuffer) {
+static void
+draw(XImage *framebuffer)
+{
+	ObscuraScene *scene = World.scene;
+	ObscuraComponent *component = ObscuraFindComponent(scene->view, OBSCURA_COMPONENT_FAMILY_CAMERA,
+		OBSCURA_CAMERA_PROJECTION_TYPE_PERSPECTIVE);
+
+	ObscuraCamera *camera = component->component;
+
+	for (int y = 0; y < framebuffer->height; y++) {
+		for (int x = 0; x < framebuffer->width; x++) {
+			vec4 color = { 0, 0, 0, 0 };
+
+			switch (camera->anti_aliasing) {
+			case OBSCURA_CAMERA_ANTI_ALIASING_TECHNIQUE_SSAA_STOCHASTIC:
+				for (uint32_t i = 0; i < camera->samples_count; i++) {
+					float pixel_ndc_x = (x + drand48()) / framebuffer->width;
+					float pixel_ndc_y = (y + drand48()) / framebuffer->height;
+					color += castray(pixel_ndc_x, pixel_ndc_y);
+				}
+				color /= (float) camera->samples_count;
+				break;
+			default:
+				{
+					float pixel_ndc_x = (x + 0.5) / framebuffer->width;
+					float pixel_ndc_y = (y + 0.5) / framebuffer->height;
+					color = castray(pixel_ndc_x, pixel_ndc_y);
+				}
+				break;
+			}
+
+			XPutPixel(framebuffer, x, y, COLOR2UINT32(color));
+		}
+	}
+}
+
+static void
+loop(Display *display, Window window, XImage *framebuffer)
+{
 	XGCValues gc_values = {
 		.graphics_exposures = False,
 	};
@@ -102,11 +143,20 @@ static void loop(Display *display, Window window, XImage *framebuffer) {
 				if (XLookupKeysym(&event.xkey, 0) == XK_Escape) {
 					running = false;
 				} else if (XLookupKeysym(&event.xkey, 0) == XK_c) {
-					renderer.buffer_type = OBSCURA_RENDERER_BUFFER_TYPE_COLOR;
+					ObscuraComponent *component = ObscuraFindAnyComponent(World.scene->view,
+						OBSCURA_COMPONENT_FAMILY_CAMERA);
+					ObscuraCamera *camera = component->component;
+					camera->filter = OBSCURA_CAMERA_FILTER_TYPE_COLOR;
 				} else if (XLookupKeysym(&event.xkey, 0) == XK_d) {
-					renderer.buffer_type = OBSCURA_RENDERER_BUFFER_TYPE_DEPTH;
+					ObscuraComponent *component = ObscuraFindAnyComponent(World.scene->view,
+						OBSCURA_COMPONENT_FAMILY_CAMERA);
+					ObscuraCamera *camera = component->component;
+					camera->filter = OBSCURA_CAMERA_FILTER_TYPE_DEPTH;
 				} else if (XLookupKeysym(&event.xkey, 0) == XK_n) {
-					renderer.buffer_type = OBSCURA_RENDERER_BUFFER_TYPE_NORMAL;
+					ObscuraComponent *component = ObscuraFindAnyComponent(World.scene->view,
+						OBSCURA_COMPONENT_FAMILY_CAMERA);
+					ObscuraCamera *camera = component->component;
+					camera->filter = OBSCURA_CAMERA_FILTER_TYPE_NORMAL;
 				}
 				break;
 			case KeyRelease:

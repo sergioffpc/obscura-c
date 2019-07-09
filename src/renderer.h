@@ -7,15 +7,9 @@
 #include "memory.h"
 #include "tensor.h"
 
-typedef enum ObscuraRendererBufferType {
-	OBSCURA_RENDERER_BUFFER_TYPE_COLOR,
-	OBSCURA_RENDERER_BUFFER_TYPE_DEPTH,
-	OBSCURA_RENDERER_BUFFER_TYPE_NORMAL,
-} ObscuraRendererBufferType;
-
-typedef struct ObscuraRenderer {
-	ObscuraRendererBufferType	buffer_type;
-} ObscuraRenderer;
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef enum ObscuraRendererRayType {
 	OBSCURA_RENDERER_RAY_TYPE_CAMERA,
@@ -24,12 +18,18 @@ typedef enum ObscuraRendererRayType {
 typedef struct ObscuraRendererRay {
 	ObscuraRendererRayType	 type;
 	vec4			 position;
-	ObscuraCollidable	*collidable;
+	ObscuraBoundingVolume	*volume;
 } ObscuraRendererRay;
 
-extern ObscuraRendererRay *	ObscuraCreateRendererRay	(ObscuraRendererRayType, ObscuraAllocationCallbacks *);
+extern ObscuraRendererRay *	ObscuraCreateRendererRay	(ObscuraAllocationCallbacks *);
 extern void			ObscuraDestroyRendererRay	(ObscuraRendererRay **, ObscuraAllocationCallbacks *);
 
-extern uint32_t	ObscuraCastRay	(ObscuraRenderer *, ObscuraRendererRay *)	__attribute__((hot));
+extern ObscuraRendererRay *	ObscuraBindRay	(ObscuraRendererRay *, ObscuraRendererRayType, ObscuraAllocationCallbacks *);
+
+extern vec4	ObscuraCastRay	(ObscuraRendererRay *)	__attribute__((hot));
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

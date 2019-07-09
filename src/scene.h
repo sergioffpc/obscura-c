@@ -6,82 +6,95 @@
 #include "math.h"
 #include "memory.h"
 
-typedef enum ObscuraSceneComponentFamily {
-	OBSCURA_SCENE_COMPONENT_FAMILY_CAMERA		= 0x00010000,
-	OBSCURA_SCENE_COMPONENT_FAMILY_COLLIDABLE	= 0x00020000,
-	OBSCURA_SCENE_COMPONENT_FAMILY_GEOMETRY		= 0x00040000,
-	OBSCURA_SCENE_COMPONENT_FAMILY_MATERIAL		= 0x00080000,
-	OBSCURA_SCENE_COMPONENT_FAMILY_LIGHT		= 0x00100000,
-} ObscuraSceneComponentFamily;
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-typedef enum ObscuraSceneComponentType {
-	OBSCURA_SCENE_COMPONENT_TYPE_CAMERA_PERSPECTIVE	= OBSCURA_SCENE_COMPONENT_FAMILY_CAMERA | 0x0001,
+typedef enum ObscuraComponentFamily {
+	OBSCURA_COMPONENT_FAMILY_CAMERA,
+	OBSCURA_COMPONENT_FAMILY_BOUNDING_VOLUME,
+	OBSCURA_COMPONENT_FAMILY_GEOMETRY,
+	OBSCURA_COMPONENT_FAMILY_LIGHT,
+	OBSCURA_COMPONENT_FAMILY_MATERIAL,
+} ObscuraComponentFamily;
 
-	OBSCURA_SCENE_COMPONENT_TYPE_COLLIDABLE_BALL	= OBSCURA_SCENE_COMPONENT_FAMILY_COLLIDABLE | 0x0001,
-	OBSCURA_SCENE_COMPONENT_TYPE_COLLIDABLE_BOX	= OBSCURA_SCENE_COMPONENT_FAMILY_COLLIDABLE | 0x0002,
-	OBSCURA_SCENE_COMPONENT_TYPE_COLLIDABLE_CONE	= OBSCURA_SCENE_COMPONENT_FAMILY_COLLIDABLE | 0x0003,
-	OBSCURA_SCENE_COMPONENT_TYPE_COLLIDABLE_FRUSTUM	= OBSCURA_SCENE_COMPONENT_FAMILY_COLLIDABLE | 0x0004,
-	OBSCURA_SCENE_COMPONENT_TYPE_COLLIDABLE_RAY	= OBSCURA_SCENE_COMPONENT_FAMILY_COLLIDABLE | 0x0005,
+typedef struct ObscuraComponent {
+	ObscuraComponentFamily	 family;
+	void			*component;
+} ObscuraComponent;
 
-	OBSCURA_SCENE_COMPONENT_TYPE_GEOMETRY_SPHERE	= OBSCURA_SCENE_COMPONENT_FAMILY_GEOMETRY | 0x0001,
+extern ObscuraComponent *	ObscuraCreateComponent	(ObscuraComponentFamily, ObscuraAllocationCallbacks *);
+extern void			ObscuraDestroyComponent	(ObscuraComponent **, ObscuraAllocationCallbacks *);
 
-	OBSCURA_SCENE_COMPONENT_TYPE_MATERIAL_COLOR	= OBSCURA_SCENE_COMPONENT_FAMILY_MATERIAL | 0x0001,
-
-	OBSCURA_SCENE_COMPONENT_TYPE_LIGHT_AMBIENT	= OBSCURA_SCENE_COMPONENT_FAMILY_LIGHT | 0x0001,
-	OBSCURA_SCENE_COMPONENT_TYPE_LIGHT_DIRECTIONAL	= OBSCURA_SCENE_COMPONENT_FAMILY_LIGHT | 0x0002,
-	OBSCURA_SCENE_COMPONENT_TYPE_LIGHT_POINT	= OBSCURA_SCENE_COMPONENT_FAMILY_LIGHT | 0x0003,
-	OBSCURA_SCENE_COMPONENT_TYPE_LIGHT_SPOT		= OBSCURA_SCENE_COMPONENT_FAMILY_LIGHT | 0x0004,
-} ObscuraSceneComponentType;
-
-typedef struct ObscuraSceneComponent {
-	ObscuraSceneComponentType	 type;
-	void				*component;
-} ObscuraSceneComponent;
-
-extern ObscuraSceneComponent *	ObscuraCreateComponent	(ObscuraSceneComponentType, ObscuraAllocationCallbacks *);
-extern void			ObscuraDestroyComponent	(ObscuraSceneComponent **, ObscuraAllocationCallbacks *);
-
-typedef struct ObscuraSceneNode {
-	char	name[256];
-
+typedef struct ObscuraNode {
 	vec4	position;
 	vec4	interest;
 	vec4	up;
 
 	uint32_t		  components_capacity;
 	uint32_t		  components_count;
-	ObscuraSceneComponent	**components;
+	ObscuraComponent	**components;
 
 	uint32_t		  children_capacity;
 	uint32_t		  children_count;
-	struct ObscuraSceneNode **children;
-} ObscuraSceneNode;
+	struct ObscuraNode **children;
+} ObscuraNode;
 
-extern ObscuraSceneNode *	ObscuraCreateNode	(ObscuraAllocationCallbacks *);
-extern void			ObscuraDestroyNode	(ObscuraSceneNode **, ObscuraAllocationCallbacks *);
+extern ObscuraNode *	ObscuraCreateNode	(ObscuraAllocationCallbacks *);
+extern void		ObscuraDestroyNode	(ObscuraNode **, ObscuraAllocationCallbacks *);
 
-extern ObscuraSceneNode *	ObscuraAddChild	(ObscuraSceneNode *, ObscuraAllocationCallbacks *);
+extern ObscuraNode *	ObscuraAttachComponent	(ObscuraNode *, ObscuraComponent *);
+extern void		ObscuraDetachComponent	(ObscuraNode *, ObscuraComponent *);
 
-extern ObscuraSceneComponent *	ObscuraAddComponent	(ObscuraSceneNode *,
-							 ObscuraSceneComponentType,
-							 ObscuraAllocationCallbacks *);
-extern ObscuraSceneComponent *	ObscuraFindComponent	(ObscuraSceneNode *, ObscuraSceneComponentFamily);
+extern ObscuraComponent *	ObscuraFindComponent	(ObscuraNode *, int, int);
+extern ObscuraComponent *	ObscuraFindAnyComponent	(ObscuraNode *, int);
+
+extern ObscuraNode *	ObscuraAttachChild	(ObscuraNode *, ObscuraNode *);
+extern void		ObscuraDetachChild	(ObscuraNode *, ObscuraNode *);
 
 typedef struct ObscuraScene {
-	ObscuraSceneNode	*view;
+	uint32_t		  cameras_capacity;
+	uint32_t		  cameras_count;
+	ObscuraComponent	**cameras;
 
-	uint32_t		  nodes_capacity;
-	uint32_t		  nodes_count;
-	ObscuraSceneNode	**nodes;
+	uint32_t		  bounding_volumes_capacity;
+	uint32_t		  bounding_volumes_count;
+	ObscuraComponent	**bounding_volumes;
+
+	uint32_t		  geometries_capacity;
+	uint32_t		  geometries_count;
+	ObscuraComponent	**geometries;
+
+	uint32_t		  lights_capacity;
+	uint32_t		  lights_count;
+	ObscuraComponent	**lights;
+
+	uint32_t		  materials_capacity;
+	uint32_t		  materials_count;
+	ObscuraComponent	**materials;
+
+	uint32_t	  nodes_capacity;
+	uint32_t	  nodes_count;
+	ObscuraNode	**nodes;
+
+	ObscuraNode	*view;
 } ObscuraScene;
 
 extern ObscuraScene *	ObscuraCreateScene	(ObscuraAllocationCallbacks *);
 extern void		ObscuraDestroyScene	(ObscuraScene **, ObscuraAllocationCallbacks *);
 
-extern ObscuraSceneNode *	ObscuraAddNode	(ObscuraScene *, ObscuraAllocationCallbacks *);
+extern ObscuraComponent *	ObscuraAcquireComponent	(ObscuraScene *, ObscuraComponentFamily, ObscuraAllocationCallbacks *);
+extern void			ObscuraReleaseComponent	(ObscuraScene *, ObscuraComponent **, ObscuraAllocationCallbacks *);
 
-typedef void	(*PFN_ObscuraSceneVisitorFunction)	(ObscuraSceneNode *, void *);
+extern ObscuraNode *	ObscuraAcquireNode	(ObscuraScene *, ObscuraAllocationCallbacks *);
+extern void		ObscuraReleaseNode	(ObscuraScene *, ObscuraNode **, ObscuraAllocationCallbacks *);
+
+typedef void	(*PFN_ObscuraSceneVisitorFunction)	(ObscuraNode *, void *);
 
 extern void	ObscuraTraverseScene	(ObscuraScene *, PFN_ObscuraSceneVisitorFunction, void *);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

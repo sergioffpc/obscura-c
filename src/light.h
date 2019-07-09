@@ -4,6 +4,10 @@
 #include "memory.h"
 #include "tensor.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum ObscuraLightSourceType {
 	OBSCURA_LIGHT_SOURCE_TYPE_AMBIENT,
 	OBSCURA_LIGHT_SOURCE_TYPE_DIRECTIONAL,
@@ -16,8 +20,10 @@ typedef struct ObscuraLight {
 	void			*source;
 } ObscuraLight;
 
-extern ObscuraLight *	ObscuraCreateLight	(ObscuraLightSourceType, ObscuraAllocationCallbacks *);
+extern ObscuraLight *	ObscuraCreateLight	(ObscuraAllocationCallbacks *);
 extern void		ObscuraDestroyLight	(ObscuraLight **, ObscuraAllocationCallbacks *);
+
+extern ObscuraLight *	ObscuraBindSource	(ObscuraLight *, ObscuraLightSourceType, ObscuraAllocationCallbacks *);
 
 /*
  * The ambient element declares the parameters required to describe an ambient light source. An
@@ -65,6 +71,11 @@ typedef struct ObscuraLightSpot {
 	float	falloff_exponent;
 } ObscuraLightSpot;
 
-#define OBSCURA_LIGHT_ATTENUATION(l, d)	((l)->constant_attenuation + ((d) * (l)->linear_attenuation) + (((d) * (d)) * (l)->quadratic_attenuation))
+#define OBSCURA_LIGHT_ATTENUATION(l, d)	\
+	((l)->constant_attenuation + ((d) * (l)->linear_attenuation) + (((d) * (d)) * (l)->quadratic_attenuation))
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

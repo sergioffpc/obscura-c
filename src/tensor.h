@@ -5,6 +5,10 @@
 #include <math.h>
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define DEG2RADF(deg)	((float) ((deg) * M_PI / 180))
 #define RAD2DEGF(rad)	((float) ((rad) * 180 / M_PI))
 
@@ -378,5 +382,9 @@ __extern_always_inline bool quad_solver(float a, float b, float c, float *x0, fl
 
 	return true;
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

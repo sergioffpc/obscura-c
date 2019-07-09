@@ -1,7 +1,28 @@
+#include <assert.h>
+#include <stdbool.h>
+
 #include "light.h"
 
-ObscuraLight *ObscuraCreateLight(ObscuraLightSourceType type, ObscuraAllocationCallbacks *allocator) {
+ObscuraLight *
+ObscuraCreateLight(ObscuraAllocationCallbacks *allocator)
+{
 	ObscuraLight *light = allocator->allocation(sizeof(ObscuraLight), 8);
+
+	return light;
+}
+
+void
+ObscuraDestroyLight(ObscuraLight **ptr, ObscuraAllocationCallbacks *allocator)
+{
+	allocator->free((*ptr)->source);
+	allocator->free(*ptr);
+
+	*ptr = NULL;
+}
+
+ObscuraLight *
+ObscuraBindSource(ObscuraLight *light, ObscuraLightSourceType type, ObscuraAllocationCallbacks *allocator)
+{
 	light->type = type;
 
 	switch (light->type) {
@@ -17,14 +38,10 @@ ObscuraLight *ObscuraCreateLight(ObscuraLightSourceType type, ObscuraAllocationC
 	case OBSCURA_LIGHT_SOURCE_TYPE_SPOT:
 		light->source = allocator->allocation(sizeof(ObscuraLightSpot), 8);
 		break;
+	default:
+		assert(false);
+		break;
 	}
 
 	return light;
-}
-
-void ObscuraDestroyLight(ObscuraLight **ptr, ObscuraAllocationCallbacks *allocator) {
-	allocator->free((*ptr)->source);
-	allocator->free(*ptr);
-
-	*ptr = NULL;
 }
