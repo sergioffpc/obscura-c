@@ -26,19 +26,15 @@ start_routine(void *arg)
 		thr->cursor = __sync_fetch_and_add(&wq->tasks_consumer_cursor, 1);
 		while (thr->cursor >= wq->tasks_head_cursor) {
 			if (!wq->running) {
-				break;
+				return NULL;
 			}
 
 			wq->wait_strategy();
 		}
 
-		__sync_fetch_and_sub(&wq->idle_count, 1);
-
-		uint32_t mask = wq->tasks_capacity - 1;
+		uint64_t mask = wq->tasks_capacity - 1;
 		struct __work_queue_task *task = &wq->tasks[thr->cursor & mask];
 		task->func(task->arg);
-
-		__sync_fetch_and_add(&wq->idle_count, 1);
 	}
 
 	return NULL;
@@ -77,12 +73,12 @@ ObscuraCreateWorkQueue(uint32_t threads_capacity, uint32_t tasks_capacity, PFN_O
 	for (uint32_t i = 0; i < threads_capacity; i++) {
 		if (pthread_create(&wq->threads[i].thread, NULL, &start_routine, wq)) {
 			fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, strerror(errno));
-                	exit(EXIT_FAILURE);
+			exit(EXIT_FAILURE);
 		}
 
 		if (pthread_detach(wq->threads[i].thread)) {
 			fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, strerror(errno));
-                	exit(EXIT_FAILURE);
+			exit(EXIT_FAILURE);
 		}
 
 		cpu_set_t cpuset;
@@ -90,12 +86,9 @@ ObscuraCreateWorkQueue(uint32_t threads_capacity, uint32_t tasks_capacity, PFN_O
 		CPU_SET(i, &cpuset);
 		if (pthread_setaffinity_np(wq->threads[i].thread, sizeof(cpu_set_t), &cpuset)) {
 			fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, strerror(errno));
-                	exit(EXIT_FAILURE);
+			exit(EXIT_FAILURE);
 		}
-			
 	}
-
-	wq->idle_count = threads_capacity;
 
 	return wq;
 }
@@ -123,15 +116,15 @@ ObscuraDestroyWorkQueue(ObscuraWorkQueue **ptr, ObscuraAllocationCallbacks *allo
 void
 ObscuraEnqueueTask(ObscuraWorkQueue *wq, PFN_ObscuraThreadFunction fn, void *arg)
 {
-	uint32_t i = wq->tasks_head_cursor;
+	uint64_t i = wq->tasks_head_cursor;
 	while (__builtin_expect(i >= wq->tasks_tail_cursor + wq->tasks_capacity, 0)) {
 		if (!wq->running) {
-			break;
+			return;
 		}
 
-		uint32_t min = UINT_MAX;
+		uint64_t min = ULLONG_MAX;
 		for (uint32_t j = 0; j < wq->threads_capacity; j++) {
-			uint32_t cursor = wq->threads[j].cursor;
+			uint64_t cursor = wq->threads[j].cursor;
 
 			asm volatile("" ::: "memory");
 
@@ -148,7 +141,7 @@ ObscuraEnqueueTask(ObscuraWorkQueue *wq, PFN_ObscuraThreadFunction fn, void *arg
 		wq->wait_strategy();
 	}
 
-	uint32_t mask = wq->tasks_capacity - 1;
+	uint64_t mask = wq->tasks_capacity - 1;
 	struct __work_queue_task *task = &wq->tasks[i & mask];
 	task->func = fn;
 	task->arg = arg;
@@ -159,7 +152,9 @@ ObscuraEnqueueTask(ObscuraWorkQueue *wq, PFN_ObscuraThreadFunction fn, void *arg
 void
 ObscuraWaitAll(ObscuraWorkQueue *wq)
 {
-	while (wq->idle_count < wq->threads_capacity) {
-		wq->wait_strategy();
+	for (uint32_t i = 0; i < wq->threads_capacity; i++) {
+		while (wq->threads[i].cursor < wq->tasks_head_cursor) {
+			wq->wait_strategy();
+		}
 	}
 }

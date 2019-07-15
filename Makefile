@@ -15,7 +15,7 @@ ifeq ($(BUILD_DEBUG), 1)
 	CFLAGS   += -g3 -ggdb -O0 -save-temps=obj -fverbose-asm -Wa,-adhlmn=$(OBJDIR)/main.lst
 	CPPFLAGS += -DDEBUG
 else
-	CFLAGS   += -g3 -ggdb -O3 -fno-math-errno
+	CFLAGS   += -O3 -fno-math-errno
 	CPPFLAGS += -DNDEBUG
 endif
 
@@ -24,6 +24,9 @@ OBJS := $(patsubst %,$(OBJDIR)/%,$(SOURCES:c=o))
 
 .PHONY: all
 all: $(PROG)
+ifeq ($(BUILD_DEBUG), 0)
+	strip -s $(PROG)
+endif
 
 $(PROG): $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS) $(LDLIBS)

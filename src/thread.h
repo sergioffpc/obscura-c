@@ -28,7 +28,7 @@ struct __work_queue_task {
 
 struct __work_queue_thread {
 	pthread_t	thread;
-	uint32_t	cursor;
+	uint64_t	cursor;
 };
 
 typedef void	(*PFN_ObscuraWaitStrategy)	(void);
@@ -45,11 +45,9 @@ typedef struct ObscuraWorkQueue {
 
 	PFN_ObscuraWaitStrategy	wait_strategy;
 
-	volatile uint32_t	tasks_head_cursor	__attribute__((aligned(LEVEL1_DCACHE_LINESIZE)));
-	volatile uint32_t	tasks_tail_cursor	__attribute__((aligned(LEVEL1_DCACHE_LINESIZE)));
-	volatile uint32_t	tasks_consumer_cursor	__attribute__((aligned(LEVEL1_DCACHE_LINESIZE)));
-
-	uint32_t	idle_count;
+	volatile uint64_t	tasks_head_cursor	__attribute__((aligned(LEVEL1_DCACHE_LINESIZE)));
+	volatile uint64_t	tasks_tail_cursor	__attribute__((aligned(LEVEL1_DCACHE_LINESIZE)));
+	volatile uint64_t	tasks_consumer_cursor	__attribute__((aligned(LEVEL1_DCACHE_LINESIZE)));
 
 	bool	running;
 } ObscuraWorkQueue;
