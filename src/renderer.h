@@ -5,6 +5,7 @@
 
 #include "collision.h"
 #include "memory.h"
+#include "scene.h"
 #include "tensor.h"
 
 #ifdef __cplusplus
@@ -26,7 +27,7 @@ extern void			ObscuraDestroyRendererRay	(ObscuraRendererRay **, ObscuraAllocatio
 
 extern ObscuraRendererRay *	ObscuraBindRay	(ObscuraRendererRay *, ObscuraRendererRayType, ObscuraAllocationCallbacks *);
 
-extern vec4	ObscuraCastRay	(ObscuraRendererRay *)	__attribute__((hot));
+extern vec4	ObscuraCastRay	(ObscuraScene *, ObscuraRendererRay *, ObscuraAllocationCallbacks *)	__attribute__((hot));
 
 #ifdef __cplusplus
 }

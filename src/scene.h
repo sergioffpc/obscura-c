@@ -3,8 +3,8 @@
 
 #include <stdint.h>
 
-#include "math.h"
 #include "memory.h"
+#include "tensor.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -46,8 +46,8 @@ extern void		ObscuraDestroyNode	(ObscuraNode **, ObscuraAllocationCallbacks *);
 extern ObscuraNode *	ObscuraAttachComponent	(ObscuraNode *, ObscuraComponent *);
 extern void		ObscuraDetachComponent	(ObscuraNode *, ObscuraComponent *);
 
-extern ObscuraComponent *	ObscuraFindComponent	(ObscuraNode *, int, int);
-extern ObscuraComponent *	ObscuraFindAnyComponent	(ObscuraNode *, int);
+extern ObscuraComponent *	ObscuraFindComponent	(ObscuraNode *, uint32_t, uint32_t);
+extern ObscuraComponent *	ObscuraFindAnyComponent	(ObscuraNode *, uint32_t);
 
 extern ObscuraNode *	ObscuraAttachChild	(ObscuraNode *, ObscuraNode *);
 extern void		ObscuraDetachChild	(ObscuraNode *, ObscuraNode *);
@@ -89,9 +89,9 @@ extern void			ObscuraReleaseComponent	(ObscuraScene *, ObscuraComponent **, Obsc
 extern ObscuraNode *	ObscuraAcquireNode	(ObscuraScene *, ObscuraAllocationCallbacks *);
 extern void		ObscuraReleaseNode	(ObscuraScene *, ObscuraNode **, ObscuraAllocationCallbacks *);
 
-typedef void	(*PFN_ObscuraSceneVisitorFunction)	(ObscuraNode *, void *);
+typedef void	(*PFN_ObscuraSceneVisitorFunction)	(ObscuraNode *, void *, ObscuraAllocationCallbacks *);
 
-extern void	ObscuraTraverseScene	(ObscuraScene *, PFN_ObscuraSceneVisitorFunction, void *);
+extern void	ObscuraTraverseScene	(ObscuraScene *, PFN_ObscuraSceneVisitorFunction, void *, ObscuraAllocationCallbacks *);
 
 #ifdef __cplusplus
 }

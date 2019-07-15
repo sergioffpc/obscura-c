@@ -5,6 +5,8 @@
 #include <execinfo.h>
 #include <getopt.h>
 #include <libgen.h>
+#include <pthread.h>
+#include <sched.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -44,7 +46,7 @@ sighandler(int signum __attribute__((unused)), siginfo_t *siginfo, void *context
 static vec4
 castray(float pixel_ndc_x, float pixel_ndc_y)
 {
-	ObscuraScene *scene = World.scene;
+	ObscuraScene *scene = World->scene;
 	ObscuraComponent *component = ObscuraFindComponent(scene->view, OBSCURA_COMPONENT_FAMILY_CAMERA,
 		OBSCURA_CAMERA_PROJECTION_TYPE_PERSPECTIVE);
 
@@ -74,47 +76,73 @@ castray(float pixel_ndc_x, float pixel_ndc_y)
 	};
 	ObscuraRendererRay ray = {
 		.type     = OBSCURA_RENDERER_RAY_TYPE_CAMERA,
-		.position = World.scene->view->position,
+		.position = World->scene->view->position,
 		.volume   = &volume,
 	};
 
-	return ObscuraCastRay(&ray);
+	return ObscuraCastRay(World->scene, &ray, &World->allocator);
 }
 
-static void
-draw(XImage *framebuffer)
+struct partition {
+	int	 y0, y1;
+
+	XImage	*framebuffer;
+};
+
+static void *
+draw0(void *arg)
 {
-	ObscuraScene *scene = World.scene;
+	struct partition *part = arg;
+
+	ObscuraScene *scene = World->scene;
 	ObscuraComponent *component = ObscuraFindComponent(scene->view, OBSCURA_COMPONENT_FAMILY_CAMERA,
 		OBSCURA_CAMERA_PROJECTION_TYPE_PERSPECTIVE);
 
 	ObscuraCamera *camera = component->component;
 
-	for (int y = 0; y < framebuffer->height; y++) {
-		for (int x = 0; x < framebuffer->width; x++) {
+	for (int y = part->y0; y < part->y1; y++) {
+		for (int x = 0; x < part->framebuffer->width; x++) {
 			vec4 color = { 0, 0, 0, 0 };
-
 			switch (camera->anti_aliasing) {
 			case OBSCURA_CAMERA_ANTI_ALIASING_TECHNIQUE_SSAA_STOCHASTIC:
 				for (uint32_t i = 0; i < camera->samples_count; i++) {
-					float pixel_ndc_x = (x + drand48()) / framebuffer->width;
-					float pixel_ndc_y = (y + drand48()) / framebuffer->height;
+					float pixel_ndc_x = (x + drand48()) / part->framebuffer->width;
+					float pixel_ndc_y = (y + drand48()) / part->framebuffer->height;
 					color += castray(pixel_ndc_x, pixel_ndc_y);
 				}
 				color /= (float) camera->samples_count;
 				break;
 			default:
 				{
-					float pixel_ndc_x = (x + 0.5) / framebuffer->width;
-					float pixel_ndc_y = (y + 0.5) / framebuffer->height;
+					float pixel_ndc_x = (x + 0.5) / part->framebuffer->width;
+					float pixel_ndc_y = (y + 0.5) / part->framebuffer->height;
 					color = castray(pixel_ndc_x, pixel_ndc_y);
 				}
 				break;
 			}
 
-			XPutPixel(framebuffer, x, y, COLOR2UINT32(color));
+			XPutPixel(part->framebuffer, x, y, COLOR2UINT32(color));
 		}
 	}
+
+	return NULL;
+}
+
+static void
+draw(XImage *framebuffer)
+{
+	uint32_t partitions_count = World->work_queue->threads_capacity;
+	struct partition partitions[partitions_count];
+
+	size_t partition_size = framebuffer->height / partitions_count;
+	for (uint32_t i = 0; i < partitions_count; i++) {
+		partitions[i].y0 = i * partition_size;
+		partitions[i].y1 = partitions[i].y0 + partition_size;
+		partitions[i].framebuffer = framebuffer;
+
+		World->executor.execution(&draw0, &partitions[i]);
+	}
+	World->executor.wait();
 }
 
 static void
@@ -143,17 +171,17 @@ loop(Display *display, Window window, XImage *framebuffer)
 				if (XLookupKeysym(&event.xkey, 0) == XK_Escape) {
 					running = false;
 				} else if (XLookupKeysym(&event.xkey, 0) == XK_c) {
-					ObscuraComponent *component = ObscuraFindAnyComponent(World.scene->view,
+					ObscuraComponent *component = ObscuraFindAnyComponent(World->scene->view,
 						OBSCURA_COMPONENT_FAMILY_CAMERA);
 					ObscuraCamera *camera = component->component;
 					camera->filter = OBSCURA_CAMERA_FILTER_TYPE_COLOR;
 				} else if (XLookupKeysym(&event.xkey, 0) == XK_d) {
-					ObscuraComponent *component = ObscuraFindAnyComponent(World.scene->view,
+					ObscuraComponent *component = ObscuraFindAnyComponent(World->scene->view,
 						OBSCURA_COMPONENT_FAMILY_CAMERA);
 					ObscuraCamera *camera = component->component;
 					camera->filter = OBSCURA_CAMERA_FILTER_TYPE_DEPTH;
 				} else if (XLookupKeysym(&event.xkey, 0) == XK_n) {
-					ObscuraComponent *component = ObscuraFindAnyComponent(World.scene->view,
+					ObscuraComponent *component = ObscuraFindAnyComponent(World->scene->view,
 						OBSCURA_COMPONENT_FAMILY_CAMERA);
 					ObscuraCamera *camera = component->component;
 					camera->filter = OBSCURA_CAMERA_FILTER_TYPE_NORMAL;
@@ -286,9 +314,13 @@ int main(int argc, char **argv) {
 	XSync(display, False);
 	shmctl(shm_info.shmid, IPC_RMID, 0);
 
-	ObscuraLoadWorld(argv[0]);
+	World = ObscuraCreateWorld();
+
+	ObscuraLoadWorld(World, argv[0]);
 	loop(display, window, framebuffer);
-	ObscuraUnloadWorld();
+	ObscuraUnloadWorld(World);
+
+	ObscuraDestroyWorld(&World);
 
 	XShmDetach(display, &shm_info);
 	XFree(framebuffer);

@@ -3,6 +3,7 @@
 
 #include "memory.h"
 #include "scene.h"
+#include "thread.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -11,13 +12,19 @@ extern "C" {
 typedef struct ObscuraWorld {
 	ObscuraAllocationCallbacks	allocator;
 
-	ObscuraScene	*scene;
+	ObscuraWorkQueue		*work_queue;
+	ObscuraExecutionCallbacks	 executor;
+
+	ObscuraScene		*scene;
 } ObscuraWorld;
 
-extern ObscuraWorld	World;
+extern ObscuraWorld *	World;
 
-extern void	ObscuraLoadWorld	(const char *);
-extern void	ObscuraUnloadWorld	(void);
+extern ObscuraWorld *	ObscuraCreateWorld	(void);
+extern void		ObscuraDestroyWorld	(ObscuraWorld **);
+
+extern void	ObscuraLoadWorld	(ObscuraWorld *, const char *);
+extern void	ObscuraUnloadWorld	(ObscuraWorld *);
 
 #ifdef __cplusplus
 }

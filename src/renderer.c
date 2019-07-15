@@ -9,8 +9,6 @@
 #include "collision.h"
 #include "material.h"
 #include "renderer.h"
-#include "scene.h"
-#include "world.h"
 
 struct ray_casts {
 	struct {
@@ -23,7 +21,7 @@ struct ray_casts {
 };
 
 static void
-enumerate_ray_casts(ObscuraNode *node, void *arg)
+enumerate_ray_casts(ObscuraNode *node, void *arg, ObscuraAllocationCallbacks *allocator)
 {
 	if (ObscuraFindAnyComponent(node, OBSCURA_COMPONENT_FAMILY_GEOMETRY) != NULL) {
 		struct ray_casts *ray_casts = arg;
@@ -33,7 +31,7 @@ enumerate_ray_casts(ObscuraNode *node, void *arg)
 		ObscuraComponent *component = ObscuraFindAnyComponent(node, OBSCURA_COMPONENT_FAMILY_BOUNDING_VOLUME);
 		ObscuraBoundingVolume *volume = component->component;
 
-		ObscuraCollision *collision = ObscuraCreateCollision(&World.allocator);
+		ObscuraCollision *collision = ObscuraCreateCollision(allocator);
 		ObscuraCollidesWith(ray->volume, ray->position, volume, node->position, collision);
 		if (collision->hit) {
 			int i = ray_casts->casts_count++;
@@ -41,17 +39,17 @@ enumerate_ray_casts(ObscuraNode *node, void *arg)
 			ray_casts->casts[i].node = node;
 			ray_casts->casts[i].collision = collision;
 		} else {
-			ObscuraDestroyCollision(&collision, &World.allocator);
+			ObscuraDestroyCollision(&collision, allocator);
 		}
 	}
 }
 
 static void
-free_ray_casts(struct ray_casts *ray_casts)
+free_ray_casts(struct ray_casts *ray_casts, ObscuraAllocationCallbacks *allocator)
 {
 	for (uint32_t i = 0; i < ray_casts->casts_count; i++) {
 		ray_casts->casts[i].node = NULL;
-		ObscuraDestroyCollision(&ray_casts->casts[i].collision, &World.allocator);
+		ObscuraDestroyCollision(&ray_casts->casts[i].collision, allocator);
 	}
 	ray_casts->casts_count = 0;
 }
@@ -143,21 +141,21 @@ ObscuraBindRay(ObscuraRendererRay *ray, ObscuraRendererRayType type, ObscuraAllo
 }
 
 vec4
-ObscuraCastRay(ObscuraRendererRay *ray)
+ObscuraCastRay(ObscuraScene *scene, ObscuraRendererRay *ray, ObscuraAllocationCallbacks *allocator)
 {
 	struct ray_casts ray_casts = {
 		.casts       = {},
 		.casts_count = 0,
 		.ray         = ray,
 	};
-	ObscuraTraverseScene(World.scene, &enumerate_ray_casts, &ray_casts);
+	ObscuraTraverseScene(scene, &enumerate_ray_casts, &ray_casts, allocator);
 
 	int32_t index = INT32_MAX;
 	nearest_surface(&ray_casts, &index);
 
 	vec4 rgba = { 0, 0, 1, 0 };
 	if (index != INT32_MAX) {
-		ObscuraComponent *component = ObscuraFindAnyComponent(World.scene->view, OBSCURA_COMPONENT_FAMILY_CAMERA);
+		ObscuraComponent *component = ObscuraFindAnyComponent(scene->view, OBSCURA_COMPONENT_FAMILY_CAMERA);
 		ObscuraCamera *camera = component->component;
 
 		switch (camera->filter) {
@@ -176,7 +174,7 @@ ObscuraCastRay(ObscuraRendererRay *ray)
 		}
 	}
 
-	free_ray_casts(&ray_casts);
+	free_ray_casts(&ray_casts, allocator);
 
 	return rgba;
 }

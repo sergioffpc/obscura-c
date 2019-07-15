@@ -2,6 +2,7 @@
 #define __OBSCURA_THREAD_H__ 1
 
 #include <pthread.h>
+#include <stdbool.h>
 #include <stdint.h>
 
 #include "memory.h"
@@ -10,32 +11,54 @@
 extern "C" {
 #endif
 
-typedef void	(*PFN_ObscuraExecutionFunction)	(void *);
+typedef void *	(*PFN_ObscuraThreadFunction)	(void *);
 
-typedef struct __thread_pool_task {
-	PFN_ObscuraExecutionFunction	*func;
+typedef void	(*PFN_ObscuraExecutionFunction)	(PFN_ObscuraThreadFunction, void *);
+typedef void	(*PFN_ObscuraWaitFunction)	(void);
+
+typedef struct ObscuraExecutionCallbacks {
+	PFN_ObscuraExecutionFunction	execution;
+	PFN_ObscuraWaitFunction		wait;
+} ObscuraExecutionCallbacks;
+
+struct __work_queue_task {
+	PFN_ObscuraThreadFunction	 func;
 	void				*arg;
-} __thread_pool_task_t;
+};
 
-typedef struct __thread_pool_worker {
+struct __work_queue_thread {
 	pthread_t	thread;
-} __thread_pool_worker_t;
+	uint32_t	cursor;
+};
 
-typedef struct ObscuraThreadPool {
-	uint8_t			 workers_capacity;
-	uint8_t			 workers_idle	__attribute__((aligned(LEVEL1_DCACHE_LINESIZE)));
-	__thread_pool_worker_t	*workers;
+typedef void	(*PFN_ObscuraWaitStrategy)	(void);
 
-	uint32_t		 tasks_capacity;
-	uint32_t		 tasks_waiting	__attribute__((aligned(LEVEL1_DCACHE_LINESIZE)));
-	__thread_pool_task_t	*tasks;
-} ObscuraThreadPool;
+extern void	ObscuraBusySpinWait	(void);
+extern void	ObscuraYieldWait	(void);
 
-extern ObscuraThreadPool *	ObscuraCreateThreadPool		(uint8_t, uint32_t, ObscuraAllocationCallbacks *);
-extern void			ObscuraDestroyThreadPool	(ObscuraThreadPool **, ObscuraAllocationCallbacks *);
+typedef struct ObscuraWorkQueue {
+	uint32_t			 threads_capacity;
+	struct __work_queue_thread	*threads;
 
-extern void	ObscuraEnqueueWork	(ObscuraThreadPool *, PFN_ObscuraExecutionFunction, void *);
-extern void	ObscuraWaitAll		(ObscuraThreadPool *);
+	uint32_t			 tasks_capacity;
+	struct __work_queue_task	*tasks;
+
+	PFN_ObscuraWaitStrategy	wait_strategy;
+
+	volatile uint32_t	tasks_head_cursor	__attribute__((aligned(LEVEL1_DCACHE_LINESIZE)));
+	volatile uint32_t	tasks_tail_cursor	__attribute__((aligned(LEVEL1_DCACHE_LINESIZE)));
+	volatile uint32_t	tasks_consumer_cursor	__attribute__((aligned(LEVEL1_DCACHE_LINESIZE)));
+
+	uint32_t	idle_count;
+
+	bool	running;
+} ObscuraWorkQueue;
+
+extern ObscuraWorkQueue *	ObscuraCreateWorkQueue	(uint32_t, uint32_t, PFN_ObscuraWaitStrategy, ObscuraAllocationCallbacks *);
+extern void			ObscuraDestroyWorkQueue	(ObscuraWorkQueue **, ObscuraAllocationCallbacks *);
+
+extern void	ObscuraEnqueueTask	(ObscuraWorkQueue *, PFN_ObscuraThreadFunction, void *);
+extern void	ObscuraWaitAll		(ObscuraWorkQueue *);
 
 #ifdef __cplusplus
 }

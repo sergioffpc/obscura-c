@@ -9,14 +9,14 @@
 #include "scene.h"
 
 static void
-traverse(ObscuraNode *node, PFN_ObscuraSceneVisitorFunction visitor, void *arg)
+traverse(ObscuraNode *node, PFN_ObscuraSceneVisitorFunction visitor, void *arg, ObscuraAllocationCallbacks *allocator)
 {
 	for (uint32_t i = 0; i < node->children_count; i++) {
 		ObscuraNode *child = node->children[i];
-		traverse(child, visitor, arg);
+		traverse(child, visitor, arg, allocator);
 	}
 
-	visitor(node, arg);
+	visitor(node, arg, allocator);
 }
 
 ObscuraComponent *
@@ -123,7 +123,7 @@ ObscuraDetachComponent(ObscuraNode *node, ObscuraComponent *component)
 }
 
 ObscuraComponent *
-ObscuraFindComponent(ObscuraNode *node, int family, int type)
+ObscuraFindComponent(ObscuraNode *node, uint32_t family, uint32_t type)
 {
 	for (uint32_t i = 0; i < node->components_count; i++) {
 		ObscuraComponent *component = node->components[i];
@@ -165,7 +165,7 @@ ObscuraFindComponent(ObscuraNode *node, int family, int type)
 }
 
 ObscuraComponent *
-ObscuraFindAnyComponent(ObscuraNode *node, int family)
+ObscuraFindAnyComponent(ObscuraNode *node, uint32_t family)
 {
 	for (uint32_t i = 0; i < node->components_count; i++) {
 		ObscuraComponent *component = node->components[i];
@@ -402,10 +402,11 @@ ObscuraReleaseNode(ObscuraScene *scene, ObscuraNode **ptr, ObscuraAllocationCall
 }
 
 void
-ObscuraTraverseScene(ObscuraScene *scene, PFN_ObscuraSceneVisitorFunction visitor, void *arg)
+ObscuraTraverseScene(ObscuraScene *scene, PFN_ObscuraSceneVisitorFunction visitor, void *arg,
+	ObscuraAllocationCallbacks *allocator)
 {
 	for (uint32_t i = 0; i < scene->nodes_count; i++) {
 		ObscuraNode *node = scene->nodes[i];
-		traverse(node, visitor, arg);
+		traverse(node, visitor, arg, allocator);
 	}
 }
