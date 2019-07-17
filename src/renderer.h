@@ -5,15 +5,30 @@
 
 #include "collision.h"
 #include "memory.h"
-#include "scene.h"
 #include "tensor.h"
+#include "world.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+typedef void	(*PFN_ObscuraPaintFunction)	(void *, int, int, uint32_t);
+
+typedef struct ObscuraFramebuffer {
+	int	width;
+	int	height;
+
+	void	*image;
+	PFN_ObscuraPaintFunction	paint;
+} ObscuraFramebuffer;
+
 typedef enum ObscuraRendererRayType {
 	OBSCURA_RENDERER_RAY_TYPE_CAMERA,
+	OBSCURA_RENDERER_RAY_TYPE_REFLECTION,
+	OBSCURA_RENDERER_RAY_TYPE_REFRACTION,
+	OBSCURA_RENDERER_RAY_TYPE_SHADOW,
+
+	__RENDERER_RAY_TYPE_NUM_ELEMS,
 } ObscuraRendererRayType;
 
 typedef struct ObscuraRendererRay {
@@ -27,7 +42,14 @@ extern void			ObscuraDestroyRendererRay	(ObscuraRendererRay **, ObscuraAllocatio
 
 extern ObscuraRendererRay *	ObscuraBindRay	(ObscuraRendererRay *, ObscuraRendererRayType, ObscuraAllocationCallbacks *);
 
-extern vec4	ObscuraCastRay	(ObscuraScene *, ObscuraRendererRay *, ObscuraAllocationCallbacks *)	__attribute__((hot));
+typedef struct ObscuraRenderer {
+	uint64_t	cast_count[__RENDERER_RAY_TYPE_NUM_ELEMS];
+
+	ObscuraWorld		*world;
+	ObscuraFramebuffer	*framebuffer;
+} ObscuraRenderer;
+
+extern void ObscuraDraw	(ObscuraRenderer *)	__attribute__((hot));
 
 #ifdef __cplusplus
 }

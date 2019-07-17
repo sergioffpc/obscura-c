@@ -11,19 +11,11 @@
 extern "C" {
 #endif
 
-typedef void *	(*PFN_ObscuraThreadFunction)	(void *);
-
-typedef void	(*PFN_ObscuraExecutionFunction)	(PFN_ObscuraThreadFunction, void *);
-typedef void	(*PFN_ObscuraWaitFunction)	(void);
-
-typedef struct ObscuraExecutionCallbacks {
-	PFN_ObscuraExecutionFunction	execution;
-	PFN_ObscuraWaitFunction		wait;
-} ObscuraExecutionCallbacks;
+typedef void *	(*PFN_ObscuraTaskFunction)	(void *);
 
 struct __work_queue_task {
-	PFN_ObscuraThreadFunction	 func;
-	void				*arg;
+	PFN_ObscuraTaskFunction	 func;
+	void			*arg;
 };
 
 struct __work_queue_thread {
@@ -55,7 +47,7 @@ typedef struct ObscuraWorkQueue {
 extern ObscuraWorkQueue *	ObscuraCreateWorkQueue	(uint32_t, uint32_t, PFN_ObscuraWaitStrategy, ObscuraAllocationCallbacks *);
 extern void			ObscuraDestroyWorkQueue	(ObscuraWorkQueue **, ObscuraAllocationCallbacks *);
 
-extern void	ObscuraEnqueueTask	(ObscuraWorkQueue *, PFN_ObscuraThreadFunction, void *);
+extern void	ObscuraEnqueueTask	(ObscuraWorkQueue *, PFN_ObscuraTaskFunction, void *);
 extern void	ObscuraWaitAll		(ObscuraWorkQueue *);
 
 #ifdef __cplusplus

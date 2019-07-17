@@ -26,9 +26,6 @@
 #include "tensor.h"
 #include "world.h"
 
-#define COLOR2UINT32(c) \
-        (((uint32_t) (((int) ((c)[0] * 255) & 0xff) << 16) | (((int) ((c)[1] * 255) & 0xff) << 8) | ((int) ((c)[2] * 255) & 0xff)))
-
 static void
 sighandler(int signum __attribute__((unused)), siginfo_t *siginfo, void *context __attribute__((unused)))
 {
@@ -43,110 +40,8 @@ sighandler(int signum __attribute__((unused)), siginfo_t *siginfo, void *context
 	_exit(EXIT_FAILURE);
 }
 
-static vec4
-castray(float pixel_ndc_x, float pixel_ndc_y)
-{
-	ObscuraScene *scene = World->scene;
-	ObscuraComponent *component = ObscuraFindComponent(scene->view, OBSCURA_COMPONENT_FAMILY_CAMERA,
-		OBSCURA_CAMERA_PROJECTION_TYPE_PERSPECTIVE);
-
-	ObscuraCamera *camera = component->component;
-	ObscuraCameraPerspective *projection = camera->projection;
-
-	mat4 transformation = {};
-	mat4_lookat(scene->view->position, scene->view->interest, scene->view->up, transformation);
-
-	float pixel_screen_x = 2 * pixel_ndc_x - 1;
-	float pixel_screen_y = 1 - 2 * pixel_ndc_y;
-
-	float scale = tanf(DEG2RADF(projection->yfov / 2));
-	float pixel_camera_x = pixel_screen_x * projection->aspect_ratio * scale;
-	float pixel_camera_y = pixel_screen_y * scale;
-
-	vec4 p = { pixel_camera_x, pixel_camera_y, -1, 1 };
-
-	ObscuraBoundingVolumeRay bounds = {
-		.direction = mat4_transform(transformation, p),
-	};
-	bounds.direction = vec4_normalize(bounds.direction);
-
-	ObscuraBoundingVolume volume = {
-		.type   = OBSCURA_BOUNDING_VOLUME_TYPE_RAY,
-		.volume = &bounds,
-	};
-	ObscuraRendererRay ray = {
-		.type     = OBSCURA_RENDERER_RAY_TYPE_CAMERA,
-		.position = World->scene->view->position,
-		.volume   = &volume,
-	};
-
-	return ObscuraCastRay(World->scene, &ray, &World->allocator);
-}
-
-struct partition {
-	int	 y0, y1;
-
-	XImage	*framebuffer;
-};
-
-static void *
-draw0(void *arg)
-{
-	struct partition *part = arg;
-
-	ObscuraScene *scene = World->scene;
-	ObscuraComponent *component = ObscuraFindComponent(scene->view, OBSCURA_COMPONENT_FAMILY_CAMERA,
-		OBSCURA_CAMERA_PROJECTION_TYPE_PERSPECTIVE);
-
-	ObscuraCamera *camera = component->component;
-
-	for (int y = part->y0; y < part->y1; y++) {
-		for (int x = 0; x < part->framebuffer->width; x++) {
-			vec4 color = { 0, 0, 0, 0 };
-			switch (camera->anti_aliasing) {
-			case OBSCURA_CAMERA_ANTI_ALIASING_TECHNIQUE_SSAA_STOCHASTIC:
-				for (uint32_t i = 0; i < camera->samples_count; i++) {
-					float pixel_ndc_x = (x + drand48()) / part->framebuffer->width;
-					float pixel_ndc_y = (y + drand48()) / part->framebuffer->height;
-					color += castray(pixel_ndc_x, pixel_ndc_y);
-				}
-				color /= (float) camera->samples_count;
-				break;
-			default:
-				{
-					float pixel_ndc_x = (x + 0.5) / part->framebuffer->width;
-					float pixel_ndc_y = (y + 0.5) / part->framebuffer->height;
-					color = castray(pixel_ndc_x, pixel_ndc_y);
-				}
-				break;
-			}
-
-			XPutPixel(part->framebuffer, x, y, COLOR2UINT32(color));
-		}
-	}
-
-	return NULL;
-}
-
 static void
-draw(XImage *framebuffer)
-{
-	uint32_t partitions_count = World->work_queue->threads_capacity;
-	struct partition partitions[partitions_count];
-
-	size_t partition_size = framebuffer->height / partitions_count;
-	for (uint32_t i = 0; i < partitions_count; i++) {
-		partitions[i].y0 = i * partition_size;
-		partitions[i].y1 = partitions[i].y0 + partition_size;
-		partitions[i].framebuffer = framebuffer;
-
-		World->executor.execution(&draw0, &partitions[i]);
-	}
-	World->executor.wait();
-}
-
-static void
-loop(Display *display, Window window, XImage *framebuffer)
+loop(Display *display, Window window, ObscuraRenderer *renderer)
 {
 	XGCValues gc_values = {
 		.graphics_exposures = False,
@@ -171,18 +66,18 @@ loop(Display *display, Window window, XImage *framebuffer)
 				if (XLookupKeysym(&event.xkey, 0) == XK_Escape) {
 					running = false;
 				} else if (XLookupKeysym(&event.xkey, 0) == XK_c) {
-					ObscuraComponent *component = ObscuraFindAnyComponent(World->scene->view,
-						OBSCURA_COMPONENT_FAMILY_CAMERA);
+					ObscuraNode *view = renderer->world->scene->view;
+					ObscuraComponent *component = ObscuraFindAnyComponent(view, OBSCURA_COMPONENT_FAMILY_CAMERA);
 					ObscuraCamera *camera = component->component;
 					camera->filter = OBSCURA_CAMERA_FILTER_TYPE_COLOR;
 				} else if (XLookupKeysym(&event.xkey, 0) == XK_d) {
-					ObscuraComponent *component = ObscuraFindAnyComponent(World->scene->view,
-						OBSCURA_COMPONENT_FAMILY_CAMERA);
+					ObscuraNode *view = renderer->world->scene->view;
+					ObscuraComponent *component = ObscuraFindAnyComponent(view, OBSCURA_COMPONENT_FAMILY_CAMERA);
 					ObscuraCamera *camera = component->component;
 					camera->filter = OBSCURA_CAMERA_FILTER_TYPE_DEPTH;
 				} else if (XLookupKeysym(&event.xkey, 0) == XK_n) {
-					ObscuraComponent *component = ObscuraFindAnyComponent(World->scene->view,
-						OBSCURA_COMPONENT_FAMILY_CAMERA);
+					ObscuraNode *view = renderer->world->scene->view;
+					ObscuraComponent *component = ObscuraFindAnyComponent(view, OBSCURA_COMPONENT_FAMILY_CAMERA);
 					ObscuraCamera *camera = component->component;
 					camera->filter = OBSCURA_CAMERA_FILTER_TYPE_NORMAL;
 				}
@@ -198,9 +93,10 @@ loop(Display *display, Window window, XImage *framebuffer)
 			}
 		}
 
-		draw(framebuffer);
+		ObscuraDraw(renderer);
 
-		XPutImage(display, window, context, framebuffer, 0, 0, 0, 0, framebuffer->width, framebuffer->height);
+		ObscuraFramebuffer *framebuffer = renderer->framebuffer;
+		XPutImage(display, window, context, framebuffer->image, 0, 0, 0, 0, framebuffer->width, framebuffer->height);
 
 		struct timespec t1 = {};
 		clock_gettime(CLOCK_MONOTONIC, &t1);
@@ -217,11 +113,31 @@ loop(Display *display, Window window, XImage *framebuffer)
 
 			free(str);
 		}
+		if (asprintf(&str, "camera:%ld|reflect:%ld|refract:%ld|shadow:%ld",
+				renderer->cast_count[OBSCURA_RENDERER_RAY_TYPE_CAMERA],
+				renderer->cast_count[OBSCURA_RENDERER_RAY_TYPE_REFLECTION],
+				renderer->cast_count[OBSCURA_RENDERER_RAY_TYPE_REFRACTION],
+				renderer->cast_count[OBSCURA_RENDERER_RAY_TYPE_SHADOW]) != -1) {
+			XGCValues gc_values = {
+				.foreground = 0x22ff00,
+			};
+
+			GC gc = XCreateGC(display, window, GCForeground, &gc_values);
+			XDrawString(display, window, gc, 10, 40, str, strlen(str));
+
+			free(str);
+		}
 
 		frame_count++;
 
 		XSync(display, False);
 	}
+}
+
+static void
+putpixel(void *image, int x, int y, uint32_t color)
+{
+    XPutPixel((XImage *) image, x, y, color);
 }
 
 int main(int argc, char **argv) {
@@ -301,29 +217,40 @@ int main(int argc, char **argv) {
 
 	XShmSegmentInfo shm_info = {};
 
-	XImage *framebuffer = NULL;
-	framebuffer = XShmCreateImage(display, visual_info->visual, visual_info->depth, ZPixmap, NULL, &shm_info, width, height);
+	XImage *image = NULL;
+	image = XShmCreateImage(display, visual_info->visual, visual_info->depth, ZPixmap, NULL, &shm_info, width, height);
 
-	size_t framebuffer_size = framebuffer->bytes_per_line * framebuffer->height;
-	shm_info.shmid = shmget((key_t) 0, framebuffer_size, IPC_CREAT | 0777);
+	size_t image_size = image->bytes_per_line * image->height;
+	shm_info.shmid = shmget((key_t) 0, image_size, IPC_CREAT | 0777);
 
 	shm_info.shmaddr = (char *) shmat(shm_info.shmid, 0, 0);
-	framebuffer->data = shm_info.shmaddr;
+	image->data = shm_info.shmaddr;
 
 	XShmAttach(display, &shm_info);
 	XSync(display, False);
 	shmctl(shm_info.shmid, IPC_RMID, 0);
 
-	World = ObscuraCreateWorld();
+	ObscuraWorld *world = ObscuraCreateWorld();
+	ObscuraLoadWorld(world, argv[0]);
 
-	ObscuraLoadWorld(World, argv[0]);
-	loop(display, window, framebuffer);
-	ObscuraUnloadWorld(World);
+	ObscuraFramebuffer framebuffer = {
+		.width  = width,
+		.height = height,
+		.image  = image,
+		.paint  = &putpixel,
+	};
+	ObscuraRenderer renderer = {
+		.world       = world,
+		.framebuffer = &framebuffer,
+	};
 
-	ObscuraDestroyWorld(&World);
+	loop(display, window, &renderer);
+
+	ObscuraUnloadWorld(world);
+	ObscuraDestroyWorld(&world);
 
 	XShmDetach(display, &shm_info);
-	XFree(framebuffer);
+	XFree(framebuffer.image);
 	shmdt(shm_info.shmaddr);
 
 	XDestroyWindow(display, window);

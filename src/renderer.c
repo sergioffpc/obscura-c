@@ -1,5 +1,4 @@
 #include <assert.h>
-#include <float.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -7,109 +6,221 @@
 
 #include "camera.h"
 #include "collision.h"
+#include "light.h"
 #include "material.h"
 #include "renderer.h"
+#include "world.h"
 
-struct ray_casts {
-	struct {
-		ObscuraNode		*node;
-		ObscuraCollision	*collision;
-	}		casts[256];
-	uint32_t	casts_count;
+#define COLOR2UINT32(c) \
+        (((uint32_t) (((int) ((c)[0] * 255) & 0xff) << 16) | (((int) ((c)[1] * 255) & 0xff) << 8) | ((int) ((c)[2] * 255) & 0xff)))
+
+struct trace_info {
+	ObscuraNode		*geometry;
+	ObscuraCollision	 collision;
+
+#define RAY_LIGHTS_CAPACITY	256
+	ObscuraNode		*lights[RAY_LIGHTS_CAPACITY];
+	uint32_t		 lights_count;
 
 	ObscuraRendererRay	*ray;
 };
 
 static void
-enumerate_ray_casts(ObscuraNode *node, void *arg, ObscuraAllocationCallbacks *allocator)
+trace(ObscuraNode *node, void *arg)
 {
-	if (ObscuraFindAnyComponent(node, OBSCURA_COMPONENT_FAMILY_GEOMETRY) != NULL) {
-		struct ray_casts *ray_casts = arg;
+	struct trace_info *info = arg;
 
-		ObscuraRendererRay *ray = ray_casts->ray;
+	if (ObscuraFindAnyComponent(node, OBSCURA_COMPONENT_FAMILY_GEOMETRY) != NULL) {
+		ObscuraRendererRay *ray = info->ray;
 
 		ObscuraComponent *component = ObscuraFindAnyComponent(node, OBSCURA_COMPONENT_FAMILY_BOUNDING_VOLUME);
 		ObscuraBoundingVolume *volume = component->component;
 
-		ObscuraCollision *collision = ObscuraCreateCollision(allocator);
-		ObscuraCollidesWith(ray->volume, ray->position, volume, node->position, collision);
-		if (collision->hit) {
-			int i = ray_casts->casts_count++;
-
-			ray_casts->casts[i].node = node;
-			ray_casts->casts[i].collision = collision;
-		} else {
-			ObscuraDestroyCollision(&collision, allocator);
+		ObscuraCollision collision = {};
+		ObscuraCollidesWith(ray->volume, ray->position, volume, node->position, &collision);
+		if (collision.hit) {
+			if (!info->geometry || collision.hit_point[2] > info->collision.hit_point[2]) {
+				info->geometry = node;
+				info->collision = collision;
+			}
 		}
 	}
-}
 
-static void
-free_ray_casts(struct ray_casts *ray_casts, ObscuraAllocationCallbacks *allocator)
-{
-	for (uint32_t i = 0; i < ray_casts->casts_count; i++) {
-		ray_casts->casts[i].node = NULL;
-		ObscuraDestroyCollision(&ray_casts->casts[i].collision, allocator);
-	}
-	ray_casts->casts_count = 0;
-}
+	if (ObscuraFindAnyComponent(node, OBSCURA_COMPONENT_FAMILY_LIGHT) != NULL) {
+		int i = info->lights_count++;
+		assert(i < RAY_LIGHTS_CAPACITY);
 
-static void
-nearest_surface(struct ray_casts *ray_casts, int32_t *index)
-{
-	float znear = -FLT_MAX;
-
-	for (uint32_t i = 0; i < ray_casts->casts_count; i++) {
-		float zhit = ray_casts->casts[i].collision->hit_point[2];
-		if (zhit > znear) {
-			znear = zhit;
-
-			*index = i;
-		}
+		info->lights[i] = node;
 	}
 }
 
 static vec4
-cast_color_filter(struct ray_casts *ray_casts, int32_t index)
+shade(struct trace_info *info)
 {
-	ObscuraNode *node = ray_casts->casts[index].node;
-
-	ObscuraComponent *component = ObscuraFindAnyComponent(node, OBSCURA_COMPONENT_FAMILY_MATERIAL);
+	ObscuraComponent *component = ObscuraFindAnyComponent(info->geometry, OBSCURA_COMPONENT_FAMILY_MATERIAL);
 	ObscuraMaterial *material = component->component;
 
-	vec4 rgba = { 0, 0, 1, 0 };
+	vec4 color = { 0, 0, 1, 0 };
 	switch (material->type) {
-	case OBSCURA_MATERIAL_TYPE_COLOR:
-		rgba = ((ObscuraMaterialColor *) material->material)->color;
+	case OBSCURA_MATERIAL_EFFECT_TYPE_CONSTANT:
+	{
+		vec4 ambient = { 0, 0, 0, 0 };
+		for (uint32_t i = 0; i < info->lights_count; i++) {
+			ObscuraComponent *component = ObscuraFindComponent(info->lights[i], OBSCURA_COMPONENT_FAMILY_LIGHT,
+				OBSCURA_LIGHT_SOURCE_TYPE_AMBIENT);
+			if (component != NULL) {
+				ObscuraLightAmbient *light = ((ObscuraLight *) component->component)->source;
+				ambient += light->color;
+			}
+		}
+
+		const float al = 1;
+
+		ObscuraMaterialConstant *effect = material->effect;
+		switch (effect->emission.type) {
+		case OBSCURA_MATERIAL_VALUE_TYPE_COLOR:
+			color = effect->emission.value.color + ambient * al;
+			break;
+		default:
+			assert(false);
+			break;
+		}
+	}
+		break;
+	default:
+		assert(false);
+		break;
 	}
 
-	return rgba;
+	return color;
 }
 
 static vec4
-cast_depth_filter(struct ray_casts *ray_casts, int32_t index)
+cast(ObscuraRenderer *renderer, ObscuraRendererRay *ray)
 {
-	ObscuraCollision *collision = ray_casts->casts[index].collision;
-	float z = collision->hit_point[2];
+	__sync_fetch_and_add(&renderer->cast_count[ray->type], 1);
 
-	vec4 rgba = { z, z, z, 0 };
+	ObscuraScene *scene = renderer->world->scene;
 
-	return rgba;
+	struct trace_info info = {
+		.ray = ray,
+	};
+	ObscuraTraverseScene(scene, &trace, &info);
+
+	vec4 color = { 0, 0, 1, 0 };
+	if (info.collision.hit) {
+		ObscuraComponent *component = ObscuraFindAnyComponent(scene->view, OBSCURA_COMPONENT_FAMILY_CAMERA);
+		ObscuraCamera *camera = component->component;
+
+		switch (camera->filter) {
+		case OBSCURA_CAMERA_FILTER_TYPE_COLOR:
+			color = shade(&info);
+			break;
+		case OBSCURA_CAMERA_FILTER_TYPE_DEPTH:
+			color[0] = color[1] = color[2] = info.collision.hit_point[2];
+			break;
+		case OBSCURA_CAMERA_FILTER_TYPE_NORMAL:
+			color[0] = (info.collision.hit_normal[0] + 1) * 0.5;
+			color[1] = (info.collision.hit_normal[1] + 1) * 0.5;
+			color[2] = (info.collision.hit_normal[2] + 1) * 0.5;
+			break;
+		default:
+			assert(false);
+			break;
+		}
+	}
+
+	return color;
 }
 
-static vec4
-cast_normal_filter(struct ray_casts *ray_casts, int32_t index)
-{
-	ObscuraCollision *collision = ray_casts->casts[index].collision;
+struct partition_info {
+	int	 y0, y1;
 
-	vec4 rgba = {
-		(collision->hit_normal[0] + 1) * 0.5,
-		(collision->hit_normal[1] + 1) * 0.5,
-		(collision->hit_normal[2] + 1) * 0.5,
-		0,
+	ObscuraRenderer	*renderer;
+};
+
+static void *
+draw(void *arg)
+{
+	struct partition_info *info = arg;
+
+	ObscuraRenderer *renderer = info->renderer;
+	ObscuraFramebuffer *framebuffer = renderer->framebuffer;
+
+	ObscuraNode *view = renderer->world->scene->view;
+	ObscuraComponent *component = ObscuraFindComponent(view, OBSCURA_COMPONENT_FAMILY_CAMERA,
+		OBSCURA_CAMERA_PROJECTION_TYPE_PERSPECTIVE);
+	ObscuraCamera *camera = component->component;
+	ObscuraCameraPerspective *projection = camera->projection;
+
+	mat4 transformation = {};
+	mat4_lookat(view->position, view->interest, view->up, transformation);
+
+	ObscuraBoundingVolumeRay bounds = {
+		.direction = {},
+	};
+	ObscuraBoundingVolume volume = {
+		.type   = OBSCURA_BOUNDING_VOLUME_TYPE_RAY,
+		.volume = &bounds,
+	};
+	ObscuraRendererRay ray = {
+		.type     = OBSCURA_RENDERER_RAY_TYPE_CAMERA,
+		.position = view->position,
+		.volume   = &volume,
 	};
 
-	return rgba;
+	for (int y = info->y0; y < info->y1; y++) {
+		for (int x = 0; x < framebuffer->width; x++) {
+			vec4 color = { 0, 0, 0, 0 };
+			switch (camera->anti_aliasing) {
+			case OBSCURA_CAMERA_ANTI_ALIASING_TECHNIQUE_SSAA_STOCHASTIC:
+				for (uint32_t i = 0; i < camera->samples_count; i++) {
+					float pixel_ndc_x = (x + drand48()) / framebuffer->width;
+					float pixel_ndc_y = (y + drand48()) / framebuffer->height;
+
+					float pixel_screen_x = 2 * pixel_ndc_x - 1;
+					float pixel_screen_y = 1 - 2 * pixel_ndc_y;
+
+					float scale = tanf(DEG2RADF(projection->yfov / 2));
+					float pixel_camera_x = pixel_screen_x * projection->aspect_ratio * scale;
+					float pixel_camera_y = pixel_screen_y * scale;
+
+					vec4 p = { pixel_camera_x, pixel_camera_y, -1, 1 };
+
+					bounds.direction = mat4_transform(transformation, p);
+					bounds.direction = vec4_normalize(bounds.direction);
+
+					color += cast(renderer, &ray);
+				}
+				color /= (float) camera->samples_count;
+				break;
+			default:
+				{
+					float pixel_ndc_x = (x + 0.5) / framebuffer->width;
+					float pixel_ndc_y = (y + 0.5) / framebuffer->height;
+
+					float pixel_screen_x = 2 * pixel_ndc_x - 1;
+					float pixel_screen_y = 1 - 2 * pixel_ndc_y;
+
+					float scale = tanf(DEG2RADF(projection->yfov / 2));
+					float pixel_camera_x = pixel_screen_x * projection->aspect_ratio * scale;
+					float pixel_camera_y = pixel_screen_y * scale;
+
+					vec4 p = { pixel_camera_x, pixel_camera_y, -1, 1 };
+
+					bounds.direction = mat4_transform(transformation, p);
+					bounds.direction = vec4_normalize(bounds.direction);
+
+					color = cast(renderer, &ray);
+				}
+				break;
+			}
+
+			framebuffer->paint(framebuffer->image, x, y, COLOR2UINT32(color));
+		}
+	}
+
+	return NULL;
 }
 
 ObscuraRendererRay *
@@ -140,41 +251,23 @@ ObscuraBindRay(ObscuraRendererRay *ray, ObscuraRendererRayType type, ObscuraAllo
 	return ray;
 }
 
-vec4
-ObscuraCastRay(ObscuraScene *scene, ObscuraRendererRay *ray, ObscuraAllocationCallbacks *allocator)
+void
+ObscuraDraw(ObscuraRenderer *renderer)
 {
-	struct ray_casts ray_casts = {
-		.casts       = {},
-		.casts_count = 0,
-		.ray         = ray,
-	};
-	ObscuraTraverseScene(scene, &enumerate_ray_casts, &ray_casts, allocator);
+	explicit_bzero(&renderer->cast_count, sizeof(renderer->cast_count));
 
-	int32_t index = INT32_MAX;
-	nearest_surface(&ray_casts, &index);
+	ObscuraWorkQueue *wq = renderer->world->work_queue;
 
-	vec4 rgba = { 0, 0, 1, 0 };
-	if (index != INT32_MAX) {
-		ObscuraComponent *component = ObscuraFindAnyComponent(scene->view, OBSCURA_COMPONENT_FAMILY_CAMERA);
-		ObscuraCamera *camera = component->component;
+	uint32_t partitions_count = wq->threads_capacity;
+	struct partition_info partitions[partitions_count];
 
-		switch (camera->filter) {
-		case OBSCURA_CAMERA_FILTER_TYPE_COLOR:
-			rgba = cast_color_filter(&ray_casts, index);
-			break;
-		case OBSCURA_CAMERA_FILTER_TYPE_DEPTH:
-			rgba = cast_depth_filter(&ray_casts, index);
-			break;
-		case OBSCURA_CAMERA_FILTER_TYPE_NORMAL:
-			rgba = cast_normal_filter(&ray_casts, index);
-			break;
-		default:
-			assert(false);
-			break;
-		}
+	size_t partition_size = renderer->framebuffer->height / partitions_count;
+	for (uint32_t i = 0; i < partitions_count; i++) {
+		partitions[i].y0 = i * partition_size;
+		partitions[i].y1 = partitions[i].y0 + partition_size;
+		partitions[i].renderer = renderer;
+
+		ObscuraEnqueueTask(wq, &draw, &partitions[i]);
 	}
-
-	free_ray_casts(&ray_casts, allocator);
-
-	return rgba;
+	ObscuraWaitAll(wq);
 }

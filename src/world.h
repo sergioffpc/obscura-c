@@ -12,13 +12,9 @@ extern "C" {
 typedef struct ObscuraWorld {
 	ObscuraAllocationCallbacks	allocator;
 
-	ObscuraWorkQueue		*work_queue;
-	ObscuraExecutionCallbacks	 executor;
-
+	ObscuraWorkQueue	*work_queue;
 	ObscuraScene		*scene;
 } ObscuraWorld;
-
-extern ObscuraWorld *	World;
 
 extern ObscuraWorld *	ObscuraCreateWorld	(void);
 extern void		ObscuraDestroyWorld	(ObscuraWorld **);

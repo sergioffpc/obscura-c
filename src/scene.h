@@ -89,9 +89,9 @@ extern void			ObscuraReleaseComponent	(ObscuraScene *, ObscuraComponent **, Obsc
 extern ObscuraNode *	ObscuraAcquireNode	(ObscuraScene *, ObscuraAllocationCallbacks *);
 extern void		ObscuraReleaseNode	(ObscuraScene *, ObscuraNode **, ObscuraAllocationCallbacks *);
 
-typedef void	(*PFN_ObscuraSceneVisitorFunction)	(ObscuraNode *, void *, ObscuraAllocationCallbacks *);
+typedef void	(*PFN_ObscuraSceneVisitorFunction)	(ObscuraNode *, void *);
 
-extern void	ObscuraTraverseScene	(ObscuraScene *, PFN_ObscuraSceneVisitorFunction, void *, ObscuraAllocationCallbacks *);
+extern void	ObscuraTraverseScene	(ObscuraScene *, PFN_ObscuraSceneVisitorFunction, void *);
 
 #ifdef __cplusplus
 }

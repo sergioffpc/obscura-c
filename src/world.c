@@ -20,8 +20,6 @@
 #include "thread.h"
 #include "world.h"
 
-ObscuraWorld *	World = NULL;
-
 static void
 mem_free(void *ptr)
 {
@@ -72,18 +70,6 @@ mem_realloc(void *original, size_t size, size_t alignment)
 	return ptr;
 }
 
-static void
-thr_exec(PFN_ObscuraThreadFunction fn, void *arg)
-{
-	ObscuraEnqueueTask(World->work_queue, fn, arg);
-}
-
-static void
-thr_wait()
-{
-	ObscuraWaitAll(World->work_queue);
-}
-
 #define PARSER_STATE_CAPACITY	256
 static struct parser_state {
 	enum {
@@ -95,6 +81,8 @@ static struct parser_state {
 		PARSER_STATE_TYPE_BOUNDING_VOLUME_BALL,
 		PARSER_STATE_TYPE_BOUNDING_VOLUME_BOX,
 		PARSER_STATE_TYPE_BOUNDING_VOLUMES,
+		PARSER_STATE_TYPE_COLOR,
+		PARSER_STATE_TYPE_COLOR_OR_TEXTURE,
 		PARSER_STATE_TYPE_COMPONENTS,
 		PARSER_STATE_TYPE_FLOAT,
 		PARSER_STATE_TYPE_INT,
@@ -108,9 +96,10 @@ static struct parser_state {
 		PARSER_STATE_TYPE_LIGHT_SPOT,
 		PARSER_STATE_TYPE_LIGHTS,
 		PARSER_STATE_TYPE_MATERIAL,
+		PARSER_STATE_TYPE_MATERIAL_CONSTANT,
+		PARSER_STATE_TYPE_MATERIAL_PHONG,
 		PARSER_STATE_TYPE_MATERIALS,
 		PARSER_STATE_TYPE_REF,
-		PARSER_STATE_TYPE_RGBA,
 		PARSER_STATE_TYPE_NODE,
 		PARSER_STATE_TYPE_NODES,
 		PARSER_STATE_TYPE_VECTOR4,
@@ -129,13 +118,13 @@ static struct parser_anchor {
 static int8_t	anchoridx = -1;
 
 static void
-camera_scalar_event(yaml_event_t *event)
+camera_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocator)
 {
 	ObscuraCamera *camera = evstack[evpointer].ptr;
 
 	evpointer++;
 	if (!strcmp((char *) event->data.scalar.value, "perspective")) {
-		ObscuraBindProjection(camera, OBSCURA_CAMERA_PROJECTION_TYPE_PERSPECTIVE, &World->allocator);
+		ObscuraBindProjection(camera, OBSCURA_CAMERA_PROJECTION_TYPE_PERSPECTIVE, allocator);
 
 		evstack[evpointer].type = PARSER_STATE_TYPE_CAMERA_PERSPECTIVE;
 		evstack[evpointer].ptr  = camera;
@@ -148,13 +137,13 @@ camera_scalar_event(yaml_event_t *event)
 }
 
 static void
-camera_end_event(yaml_event_t *event __attribute__((unused)))
+camera_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	evpointer--;
 }
 
 static void
-camera_anti_aliasing_scalar_event(yaml_event_t *event)
+camera_anti_aliasing_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	ObscuraCamera *camera = evstack[evpointer].ptr;
 
@@ -171,13 +160,13 @@ camera_anti_aliasing_scalar_event(yaml_event_t *event)
 }
 
 static void
-camera_anti_aliasing_end_event(yaml_event_t *event __attribute__((unused)))
+camera_anti_aliasing_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	evpointer--;
 }
 
 static void
-camera_perspective_scalar_event(yaml_event_t *event)
+camera_perspective_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	ObscuraCamera *camera = evstack[evpointer].ptr;
 
@@ -198,18 +187,18 @@ camera_perspective_scalar_event(yaml_event_t *event)
 }
 
 static void
-camera_perspective_end_event(yaml_event_t *event __attribute__((unused)))
+camera_perspective_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	evpointer--;
 }
 
 static void
-cameras_scalar_event(yaml_event_t *event)
+cameras_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocator)
 {
 	ObscuraScene *scene = evstack[evpointer].ptr;
 
 	evpointer++;
-	ObscuraComponent *camera = ObscuraAcquireComponent(scene, OBSCURA_COMPONENT_FAMILY_CAMERA, &World->allocator);
+	ObscuraComponent *camera = ObscuraAcquireComponent(scene, OBSCURA_COMPONENT_FAMILY_CAMERA, allocator);
 	assert(camera);
 
 	evstack[evpointer].type = PARSER_STATE_TYPE_CAMERA;
@@ -225,24 +214,24 @@ cameras_scalar_event(yaml_event_t *event)
 }
 
 static void
-cameras_end_event(yaml_event_t *event __attribute__((unused)))
+cameras_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	evpointer--;
 }
 
 static void
-bounding_volume_scalar_event(yaml_event_t *event)
+bounding_volume_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocator)
 {
 	ObscuraBoundingVolume *volume = evstack[evpointer].ptr;
 
 	evpointer++;
 	if (!strcmp((char *) event->data.scalar.value, "ball")) {
-		ObscuraBindBoundingVolume(volume, OBSCURA_BOUNDING_VOLUME_TYPE_BALL, &World->allocator);
+		ObscuraBindBoundingVolume(volume, OBSCURA_BOUNDING_VOLUME_TYPE_BALL, allocator);
 
 		evstack[evpointer].type = PARSER_STATE_TYPE_BOUNDING_VOLUME_BALL;
 		evstack[evpointer].ptr  = volume;
 	} else if (!strcmp((char *) event->data.scalar.value, "box")) {
-		ObscuraBindBoundingVolume(volume, OBSCURA_BOUNDING_VOLUME_TYPE_BOX, &World->allocator);
+		ObscuraBindBoundingVolume(volume, OBSCURA_BOUNDING_VOLUME_TYPE_BOX, allocator);
 
 		evstack[evpointer].type = PARSER_STATE_TYPE_BOUNDING_VOLUME_BOX;
 		evstack[evpointer].ptr  = volume;
@@ -252,13 +241,13 @@ bounding_volume_scalar_event(yaml_event_t *event)
 }
 
 static void
-bounding_volume_end_event(yaml_event_t *event __attribute__((unused)))
+bounding_volume_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	evpointer--;
 }
 
 static void
-bounding_volume_ball_scalar_event(yaml_event_t *event)
+bounding_volume_ball_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	ObscuraBoundingVolume *volume = evstack[evpointer].ptr;
 
@@ -273,13 +262,13 @@ bounding_volume_ball_scalar_event(yaml_event_t *event)
 }
 
 static void
-bounding_volume_ball_end_event(yaml_event_t *event __attribute__((unused)))
+bounding_volume_ball_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	evpointer--;
 }
 
 static void
-bounding_volume_box_scalar_event(yaml_event_t *event)
+bounding_volume_box_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	ObscuraBoundingVolume *volume = evstack[evpointer].ptr;
 
@@ -294,18 +283,18 @@ bounding_volume_box_scalar_event(yaml_event_t *event)
 }
 
 static void
-bounding_volume_box_end_event(yaml_event_t *event __attribute__((unused)))
+bounding_volume_box_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	evpointer--;
 }
 
 static void
-bounding_volumes_scalar_event(yaml_event_t *event)
+bounding_volumes_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocator)
 {
 	ObscuraScene *scene = evstack[evpointer].ptr;
 
 	evpointer++;
-	ObscuraComponent *volume = ObscuraAcquireComponent(scene, OBSCURA_COMPONENT_FAMILY_BOUNDING_VOLUME, &World->allocator);
+	ObscuraComponent *volume = ObscuraAcquireComponent(scene, OBSCURA_COMPONENT_FAMILY_BOUNDING_VOLUME, allocator);
 	assert(volume);
 
 	evstack[evpointer].type = PARSER_STATE_TYPE_BOUNDING_VOLUME;
@@ -321,14 +310,14 @@ bounding_volumes_scalar_event(yaml_event_t *event)
 }
 
 static void
-bounding_volumes_end_event(yaml_event_t *event __attribute__((unused)))
+bounding_volumes_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	evpointer--;
 }
 
 
 static void
-components_scalar_event(yaml_event_t *event)
+components_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	ObscuraNode *node = evstack[evpointer].ptr;
 
@@ -341,19 +330,19 @@ components_scalar_event(yaml_event_t *event)
 }
 
 static void
-components_end_event(yaml_event_t *event __attribute__((unused)))
+components_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	evpointer--;
 }
 
 static void
-geometry_scalar_event(yaml_event_t *event)
+geometry_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocator)
 {
 	ObscuraGeometry *geometry = evstack[evpointer].ptr;
 
 	evpointer++;
 	if (!strcmp((char *) event->data.scalar.value, "sphere")) {
-		ObscuraBindGeometry(geometry, OBSCURA_GEOMETRY_TYPE_PARAMETRIC_SPHERE, &World->allocator);
+		ObscuraBindGeometry(geometry, OBSCURA_GEOMETRY_TYPE_PARAMETRIC_SPHERE, allocator);
 
 		evstack[evpointer].type = PARSER_STATE_TYPE_GEOMETRY_SPHERE;
 		evstack[evpointer].ptr  = geometry;
@@ -363,13 +352,13 @@ geometry_scalar_event(yaml_event_t *event)
 }
 
 static void
-geometry_end_event(yaml_event_t *event __attribute__((unused)))
+geometry_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	evpointer--;
 }
 
 static void
-geometry_sphere_scalar_event(yaml_event_t *event)
+geometry_sphere_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	ObscuraGeometry *geometry = evstack[evpointer].ptr;
 
@@ -384,18 +373,18 @@ geometry_sphere_scalar_event(yaml_event_t *event)
 }
 
 static void
-geometry_sphere_end_event(yaml_event_t *event __attribute__((unused)))
+geometry_sphere_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	evpointer--;
 }
 
 static void
-geometries_scalar_event(yaml_event_t *event)
+geometries_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocator)
 {
 	ObscuraScene *scene = evstack[evpointer].ptr;
 
 	evpointer++;
-	ObscuraComponent *geometry = ObscuraAcquireComponent(scene, OBSCURA_COMPONENT_FAMILY_GEOMETRY, &World->allocator);
+	ObscuraComponent *geometry = ObscuraAcquireComponent(scene, OBSCURA_COMPONENT_FAMILY_GEOMETRY, allocator);
 	assert(geometry);
 
 	evstack[evpointer].type = PARSER_STATE_TYPE_GEOMETRY;
@@ -411,34 +400,34 @@ geometries_scalar_event(yaml_event_t *event)
 }
 
 static void
-geometries_end_event(yaml_event_t *event __attribute__((unused)))
+geometries_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	evpointer--;
 }
 
 static void
-light_scalar_event(yaml_event_t *event)
+light_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocator)
 {
 	ObscuraLight *light = evstack[evpointer].ptr;
 
 	evpointer++;
 	if (!strcmp((char *) event->data.scalar.value, "ambient")) {
-		ObscuraBindSource(light, OBSCURA_LIGHT_SOURCE_TYPE_AMBIENT, &World->allocator);
+		ObscuraBindSource(light, OBSCURA_LIGHT_SOURCE_TYPE_AMBIENT, allocator);
 
 		evstack[evpointer].type = PARSER_STATE_TYPE_LIGHT_AMBIENT;
 		evstack[evpointer].ptr  = light;
 	} else if (!strcmp((char *) event->data.scalar.value, "directional")) {
-		ObscuraBindSource(light, OBSCURA_LIGHT_SOURCE_TYPE_DIRECTIONAL, &World->allocator);
+		ObscuraBindSource(light, OBSCURA_LIGHT_SOURCE_TYPE_DIRECTIONAL, allocator);
 
 		evstack[evpointer].type = PARSER_STATE_TYPE_LIGHT_DIRECTIONAL;
 		evstack[evpointer].ptr  = light;
 	} else if (!strcmp((char *) event->data.scalar.value, "point")) {
-		ObscuraBindSource(light, OBSCURA_LIGHT_SOURCE_TYPE_POINT, &World->allocator);
+		ObscuraBindSource(light, OBSCURA_LIGHT_SOURCE_TYPE_POINT, allocator);
 
 		evstack[evpointer].type = PARSER_STATE_TYPE_LIGHT_POINT;
 		evstack[evpointer].ptr  = light;
 	} else if (!strcmp((char *) event->data.scalar.value, "spot")) {
-		ObscuraBindSource(light, OBSCURA_LIGHT_SOURCE_TYPE_SPOT, &World->allocator);
+		ObscuraBindSource(light, OBSCURA_LIGHT_SOURCE_TYPE_SPOT, allocator);
 
 		evstack[evpointer].type = PARSER_STATE_TYPE_LIGHT_SPOT;
 		evstack[evpointer].ptr  = light;
@@ -448,19 +437,19 @@ light_scalar_event(yaml_event_t *event)
 }
 
 static void
-light_end_event(yaml_event_t *event __attribute__((unused)))
+light_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	evpointer--;
 }
 
 static void
-light_ambient_scalar_event(yaml_event_t *event)
+light_ambient_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	ObscuraLight *light = evstack[evpointer].ptr;
 
 	evpointer++;
 	if (!strcmp((char *) event->data.scalar.value, "color")) {
-		evstack[evpointer].type = PARSER_STATE_TYPE_RGBA;
+		evstack[evpointer].type = PARSER_STATE_TYPE_COLOR;
 		evstack[evpointer].ptr = &((ObscuraLightAmbient *) light->source)->color;
 	} else {
 		assert(false);
@@ -468,19 +457,19 @@ light_ambient_scalar_event(yaml_event_t *event)
 }
 
 static void
-light_ambient_end_event(yaml_event_t *event __attribute__((unused)))
+light_ambient_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	evpointer--;
 }
 
 static void
-light_directional_scalar_event(yaml_event_t *event)
+light_directional_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	ObscuraLight *light = evstack[evpointer].ptr;
 
 	evpointer++;
 	if (!strcmp((char *) event->data.scalar.value, "color")) {
-		evstack[evpointer].type = PARSER_STATE_TYPE_RGBA;
+		evstack[evpointer].type = PARSER_STATE_TYPE_COLOR;
 		evstack[evpointer].ptr = &((ObscuraLightDirectional *) light->source)->color;
 	} else if (!strcmp((char *) event->data.scalar.value, "direction")) {
 		evstack[evpointer].type = PARSER_STATE_TYPE_VECTOR4;
@@ -491,19 +480,19 @@ light_directional_scalar_event(yaml_event_t *event)
 }
 
 static void
-light_directional_end_event(yaml_event_t *event __attribute__((unused)))
+light_directional_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	evpointer--;
 }
 
 static void
-light_point_scalar_event(yaml_event_t *event)
+light_point_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	ObscuraLight *light = evstack[evpointer].ptr;
 
 	evpointer++;
 	if (!strcmp((char *) event->data.scalar.value, "color")) {
-		evstack[evpointer].type = PARSER_STATE_TYPE_RGBA;
+		evstack[evpointer].type = PARSER_STATE_TYPE_COLOR;
 		evstack[evpointer].ptr = &((ObscuraLightPoint *) light->source)->color;
 	} else if (!strcmp((char *) event->data.scalar.value, "constant_attenuation")) {
 		evstack[evpointer].type = PARSER_STATE_TYPE_FLOAT;
@@ -520,19 +509,19 @@ light_point_scalar_event(yaml_event_t *event)
 }
 
 static void
-light_point_end_event(yaml_event_t *event __attribute__((unused)))
+light_point_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	evpointer--;
 }
 
 static void
-light_spot_scalar_event(yaml_event_t *event)
+light_spot_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	ObscuraLight *light = evstack[evpointer].ptr;
 
 	evpointer++;
 	if (!strcmp((char *) event->data.scalar.value, "color")) {
-		evstack[evpointer].type = PARSER_STATE_TYPE_RGBA;
+		evstack[evpointer].type = PARSER_STATE_TYPE_COLOR;
 		evstack[evpointer].ptr = &((ObscuraLightSpot *) light->source)->color;
 	} else if (!strcmp((char *) event->data.scalar.value, "direction")) {
 		evstack[evpointer].type = PARSER_STATE_TYPE_VECTOR4;
@@ -558,18 +547,18 @@ light_spot_scalar_event(yaml_event_t *event)
 }
 
 static void
-light_spot_end_event(yaml_event_t *event __attribute__((unused)))
+light_spot_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	evpointer--;
 }
 
 static void
-lights_scalar_event(yaml_event_t *event)
+lights_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocator)
 {
 	ObscuraScene *scene = evstack[evpointer].ptr;
 
 	evpointer++;
-	ObscuraComponent *light = ObscuraAcquireComponent(scene, OBSCURA_COMPONENT_FAMILY_LIGHT, &World->allocator);
+	ObscuraComponent *light = ObscuraAcquireComponent(scene, OBSCURA_COMPONENT_FAMILY_LIGHT, allocator);
 	assert(light);
 
 	evstack[evpointer].type = PARSER_STATE_TYPE_LIGHT;
@@ -585,40 +574,127 @@ lights_scalar_event(yaml_event_t *event)
 }
 
 static void
-lights_end_event(yaml_event_t *event __attribute__((unused)))
+lights_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	evpointer--;
 }
 
 static void
-material_scalar_event(yaml_event_t *event)
+material_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocator)
 {
 	ObscuraMaterial *material = evstack[evpointer].ptr;
 
 	evpointer++;
-	if (!strcmp((char *) event->data.scalar.value, "color")) {
-		ObscuraBindMaterial(material, OBSCURA_MATERIAL_TYPE_COLOR, &World->allocator);
+	if (!strcmp((char *) event->data.scalar.value, "constant")) {
+		ObscuraBindEffect(material, OBSCURA_MATERIAL_EFFECT_TYPE_CONSTANT, allocator);
 
-		evstack[evpointer].type = PARSER_STATE_TYPE_RGBA;
-		evstack[evpointer].ptr  = &((ObscuraMaterialColor *) material->material)->color;
+		evstack[evpointer].type = PARSER_STATE_TYPE_MATERIAL_CONSTANT;
+		evstack[evpointer].ptr  = material;
+	} else if (!strcmp((char *) event->data.scalar.value, "phong")) {
+		ObscuraBindEffect(material, OBSCURA_MATERIAL_EFFECT_TYPE_PHONG, allocator);
+
+		evstack[evpointer].type = PARSER_STATE_TYPE_MATERIAL_PHONG;
+		evstack[evpointer].ptr  = material;
 	} else {
 		assert(false);
 	}
 }
 
 static void
-material_end_event(yaml_event_t *event __attribute__((unused)))
+material_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	evpointer--;
 }
 
 static void
-materials_scalar_event(yaml_event_t *event)
+material_constant_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocator __attribute__((unused)))
+{
+	ObscuraMaterial *material = evstack[evpointer].ptr;
+
+	evpointer++;
+	if (!strcmp((char *) event->data.scalar.value, "emission")) {
+		evstack[evpointer].type = PARSER_STATE_TYPE_COLOR_OR_TEXTURE;
+		evstack[evpointer].ptr = &((ObscuraMaterialConstant *) material->effect)->emission;
+	} else if (!strcmp((char *) event->data.scalar.value, "reflective")) {
+		evstack[evpointer].type = PARSER_STATE_TYPE_COLOR_OR_TEXTURE;
+		evstack[evpointer].ptr = &((ObscuraMaterialConstant *) material->effect)->reflective;
+	} else if (!strcmp((char *) event->data.scalar.value, "reflectivity")) {
+		evstack[evpointer].type = PARSER_STATE_TYPE_FLOAT;
+		evstack[evpointer].ptr = &((ObscuraMaterialConstant *) material->effect)->reflectivity;
+	} else if (!strcmp((char *) event->data.scalar.value, "transparent")) {
+		evstack[evpointer].type = PARSER_STATE_TYPE_COLOR_OR_TEXTURE;
+		evstack[evpointer].ptr = &((ObscuraMaterialConstant *) material->effect)->transparent;
+	} else if (!strcmp((char *) event->data.scalar.value, "transparency")) {
+		evstack[evpointer].type = PARSER_STATE_TYPE_FLOAT;
+		evstack[evpointer].ptr = &((ObscuraMaterialConstant *) material->effect)->transparency;
+	} else if (!strcmp((char *) event->data.scalar.value, "index_of_refraction")) {
+		evstack[evpointer].type = PARSER_STATE_TYPE_FLOAT;
+		evstack[evpointer].ptr = &((ObscuraMaterialConstant *) material->effect)->index_of_refraction;
+	} else {
+		assert(false);
+	}
+}
+
+static void
+material_constant_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
+{
+	evpointer--;
+}
+
+static void
+material_phong_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocator __attribute__((unused)))
+{
+	ObscuraMaterial *material = evstack[evpointer].ptr;
+
+	evpointer++;
+	if (!strcmp((char *) event->data.scalar.value, "emission")) {
+		evstack[evpointer].type = PARSER_STATE_TYPE_COLOR_OR_TEXTURE;
+		evstack[evpointer].ptr = &((ObscuraMaterialPhong *) material->effect)->emission;
+	} else if (!strcmp((char *) event->data.scalar.value, "ambient")) {
+		evstack[evpointer].type = PARSER_STATE_TYPE_COLOR_OR_TEXTURE;
+		evstack[evpointer].ptr = &((ObscuraMaterialPhong *) material->effect)->ambient;
+	} else if (!strcmp((char *) event->data.scalar.value, "diffuse")) {
+		evstack[evpointer].type = PARSER_STATE_TYPE_COLOR_OR_TEXTURE;
+		evstack[evpointer].ptr = &((ObscuraMaterialPhong *) material->effect)->diffuse;
+	} else if (!strcmp((char *) event->data.scalar.value, "specular")) {
+		evstack[evpointer].type = PARSER_STATE_TYPE_COLOR_OR_TEXTURE;
+		evstack[evpointer].ptr = &((ObscuraMaterialPhong *) material->effect)->specular;
+	} else if (!strcmp((char *) event->data.scalar.value, "shininess")) {
+		evstack[evpointer].type = PARSER_STATE_TYPE_COLOR_OR_TEXTURE;
+		evstack[evpointer].ptr = &((ObscuraMaterialPhong *) material->effect)->shininess;
+	} else if (!strcmp((char *) event->data.scalar.value, "reflective")) {
+		evstack[evpointer].type = PARSER_STATE_TYPE_COLOR_OR_TEXTURE;
+		evstack[evpointer].ptr = &((ObscuraMaterialPhong *) material->effect)->reflective;
+	} else if (!strcmp((char *) event->data.scalar.value, "reflectivity")) {
+		evstack[evpointer].type = PARSER_STATE_TYPE_FLOAT;
+		evstack[evpointer].ptr = &((ObscuraMaterialPhong *) material->effect)->reflectivity;
+	} else if (!strcmp((char *) event->data.scalar.value, "transparent")) {
+		evstack[evpointer].type = PARSER_STATE_TYPE_COLOR_OR_TEXTURE;
+		evstack[evpointer].ptr = &((ObscuraMaterialPhong *) material->effect)->transparent;
+	} else if (!strcmp((char *) event->data.scalar.value, "transparency")) {
+		evstack[evpointer].type = PARSER_STATE_TYPE_FLOAT;
+		evstack[evpointer].ptr = &((ObscuraMaterialPhong *) material->effect)->transparency;
+	} else if (!strcmp((char *) event->data.scalar.value, "index_of_refraction")) {
+		evstack[evpointer].type = PARSER_STATE_TYPE_FLOAT;
+		evstack[evpointer].ptr = &((ObscuraMaterialPhong *) material->effect)->index_of_refraction;
+	} else {
+		assert(false);
+	}
+}
+
+static void
+material_phong_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
+{
+	evpointer--;
+}
+
+static void
+materials_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocator)
 {
 	ObscuraScene *scene = evstack[evpointer].ptr;
 
 	evpointer++;
-	ObscuraComponent *material = ObscuraAcquireComponent(scene, OBSCURA_COMPONENT_FAMILY_MATERIAL, &World->allocator);
+	ObscuraComponent *material = ObscuraAcquireComponent(scene, OBSCURA_COMPONENT_FAMILY_MATERIAL, allocator);
 	assert(material);
 
 	evstack[evpointer].type = PARSER_STATE_TYPE_MATERIAL;
@@ -634,13 +710,13 @@ materials_scalar_event(yaml_event_t *event)
 }
 
 static void
-materials_end_event(yaml_event_t *event __attribute__((unused)))
+materials_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	evpointer--;
 }
 
 static void
-node_scalar_event(yaml_event_t *event)
+node_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	ObscuraNode *node = evstack[evpointer].ptr;
 
@@ -663,18 +739,18 @@ node_scalar_event(yaml_event_t *event)
 }
 
 static void
-node_end_event(yaml_event_t *event __attribute__((unused)))
+node_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	evpointer--;
 }
 
 static void
-nodes_scalar_event(yaml_event_t *event)
+nodes_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocator)
 {
 	ObscuraScene *scene = evstack[evpointer].ptr;
 
 	evpointer++;
-	ObscuraNode *node = ObscuraAcquireNode(scene, &World->allocator);
+	ObscuraNode *node = ObscuraAcquireNode(scene, allocator);
 	assert(node);
 
 	evstack[evpointer].type = PARSER_STATE_TYPE_NODE;
@@ -688,13 +764,13 @@ nodes_scalar_event(yaml_event_t *event)
 }
 
 static void
-nodes_end_event(yaml_event_t *event __attribute__((unused)))
+nodes_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	evpointer--;
 }
 
 static void
-scene_scalar_event(yaml_event_t *event)
+scene_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	ObscuraScene *scene = evstack[evpointer].ptr;
 
@@ -726,13 +802,13 @@ scene_scalar_event(yaml_event_t *event)
 }
 
 static void
-scene_end_event(yaml_event_t *event __attribute__((unused)))
+scene_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	evpointer--;
 }
 
 ObscuraWorld *
-ObscuraCreateWorld(void)
+ObscuraCreateWorld()
 {
 	ObscuraWorld *world = mem_alloc(sizeof(ObscuraWorld), 8);
 	world->allocator.allocation   = &mem_alloc;
@@ -740,8 +816,6 @@ ObscuraCreateWorld(void)
 	world->allocator.free         = &mem_free;
 
 	world->work_queue = ObscuraCreateWorkQueue(get_nprocs(), 256, &ObscuraBusySpinWait, &world->allocator);
-	world->executor.execution = &thr_exec;
-	world->executor.wait      = &thr_wait;
 
 	return world;
 }
@@ -789,10 +863,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_CAMERA:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				camera_scalar_event(&event);
+				camera_scalar_event(&event, &world->allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				camera_end_event(&event);
+				camera_end_event(&event, &world->allocator);
 				break;
 			default:
 				break;
@@ -801,10 +875,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_CAMERA_ANTI_ALIASING:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				camera_anti_aliasing_scalar_event(&event);
+				camera_anti_aliasing_scalar_event(&event, &world->allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				camera_anti_aliasing_end_event(&event);
+				camera_anti_aliasing_end_event(&event, &world->allocator);
 				break;
 			default:
 				break;
@@ -813,10 +887,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_CAMERA_PERSPECTIVE:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				camera_perspective_scalar_event(&event);
+				camera_perspective_scalar_event(&event, &world->allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				camera_perspective_end_event(&event);
+				camera_perspective_end_event(&event, &world->allocator);
 				break;
 			default:
 				break;
@@ -825,10 +899,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_CAMERAS:
 			switch (event.type) {
 			case YAML_MAPPING_START_EVENT:
-				cameras_scalar_event(&event);
+				cameras_scalar_event(&event, &world->allocator);
 				break;
 			case YAML_SEQUENCE_END_EVENT:
-				cameras_end_event(&event);
+				cameras_end_event(&event, &world->allocator);
 				break;
 			default:
 				break;
@@ -837,10 +911,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_BOUNDING_VOLUME:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				bounding_volume_scalar_event(&event);
+				bounding_volume_scalar_event(&event, &world->allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				bounding_volume_end_event(&event);
+				bounding_volume_end_event(&event, &world->allocator);
 				break;
 			default:
 				break;
@@ -849,10 +923,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_BOUNDING_VOLUME_BALL:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				bounding_volume_ball_scalar_event(&event);
+				bounding_volume_ball_scalar_event(&event, &world->allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				bounding_volume_ball_end_event(&event);
+				bounding_volume_ball_end_event(&event, &world->allocator);
 				break;
 			default:
 				break;
@@ -861,10 +935,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_BOUNDING_VOLUME_BOX:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				bounding_volume_box_scalar_event(&event);
+				bounding_volume_box_scalar_event(&event, &world->allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				bounding_volume_box_end_event(&event);
+				bounding_volume_box_end_event(&event, &world->allocator);
 				break;
 			default:
 				break;
@@ -873,10 +947,57 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_BOUNDING_VOLUMES:
 			switch (event.type) {
 			case YAML_MAPPING_START_EVENT:
-				bounding_volumes_scalar_event(&event);
+				bounding_volumes_scalar_event(&event, &world->allocator);
 				break;
 			case YAML_SEQUENCE_END_EVENT:
-				bounding_volumes_end_event(&event);
+				bounding_volumes_end_event(&event, &world->allocator);
+				break;
+			default:
+				break;
+			}
+			break;
+		case PARSER_STATE_TYPE_COLOR:
+			switch (event.type) {
+			case YAML_SCALAR_EVENT:
+				evpointer++;
+				evstack[evpointer].type = PARSER_STATE_TYPE_FLOAT;
+				evstack[evpointer].ptr  = evstack[evpointer - 1].ptr;
+
+				if (!strcmp((char *) event.data.scalar.value, "r")) {
+					evstack[evpointer].ptr += 0 * sizeof(float);
+				} else if (!strcmp((char *) event.data.scalar.value, "g")) {
+					evstack[evpointer].ptr += 1 * sizeof(float);
+				} else if (!strcmp((char *) event.data.scalar.value, "b")) {
+					evstack[evpointer].ptr += 2 * sizeof(float);
+				} else if (!strcmp((char *) event.data.scalar.value, "a")) {
+					evstack[evpointer].ptr += 3 * sizeof(float);
+				} else {
+					assert(false);
+				}
+				break;
+			case YAML_MAPPING_END_EVENT:
+				evpointer--;
+				break;
+			default:
+				break;
+			}
+			break;
+		case PARSER_STATE_TYPE_COLOR_OR_TEXTURE:
+			switch (event.type) {
+			case YAML_SCALAR_EVENT:
+				evpointer++;
+				if (!strcmp((char *) event.data.scalar.value, "color")) {
+					struct __material_color_or_texture *value = evstack[evpointer - 1].ptr;
+					value->type = OBSCURA_MATERIAL_VALUE_TYPE_COLOR;
+
+					evstack[evpointer].type = PARSER_STATE_TYPE_COLOR;
+					evstack[evpointer].ptr  = &value->value.color;
+				} else {
+					assert(false);
+				}
+				break;
+			case YAML_MAPPING_END_EVENT:
+				evpointer--;
 				break;
 			default:
 				break;
@@ -885,10 +1006,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_COMPONENTS:
 			switch (event.type) {
 			case YAML_ALIAS_EVENT:
-				components_scalar_event(&event);
+				components_scalar_event(&event, &world->allocator);
 				break;
 			case YAML_SEQUENCE_END_EVENT:
-				components_end_event(&event);
+				components_end_event(&event, &world->allocator);
 				break;
 			default:
 				break;
@@ -917,10 +1038,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_GEOMETRY:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				geometry_scalar_event(&event);
+				geometry_scalar_event(&event, &world->allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				geometry_end_event(&event);
+				geometry_end_event(&event, &world->allocator);
 				break;
 			default:
 				break;
@@ -929,10 +1050,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_GEOMETRY_SPHERE:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				geometry_sphere_scalar_event(&event);
+				geometry_sphere_scalar_event(&event, &world->allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				geometry_sphere_end_event(&event);
+				geometry_sphere_end_event(&event, &world->allocator);
 				break;
 			default:
 				break;
@@ -941,10 +1062,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_GEOMETRIES:
 			switch (event.type) {
 			case YAML_MAPPING_START_EVENT:
-				geometries_scalar_event(&event);
+				geometries_scalar_event(&event, &world->allocator);
 				break;
 			case YAML_SEQUENCE_END_EVENT:
-				geometries_end_event(&event);
+				geometries_end_event(&event, &world->allocator);
 				break;
 			default:
 				break;
@@ -953,10 +1074,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_LIGHT:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				light_scalar_event(&event);
+				light_scalar_event(&event, &world->allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				light_end_event(&event);
+				light_end_event(&event, &world->allocator);
 				break;
 			default:
 				break;
@@ -965,10 +1086,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_LIGHT_AMBIENT:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				light_ambient_scalar_event(&event);
+				light_ambient_scalar_event(&event, &world->allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				light_ambient_end_event(&event);
+				light_ambient_end_event(&event, &world->allocator);
 				break;
 			default:
 				break;
@@ -977,10 +1098,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_LIGHT_DIRECTIONAL:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				light_directional_scalar_event(&event);
+				light_directional_scalar_event(&event, &world->allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				light_directional_end_event(&event);
+				light_directional_end_event(&event, &world->allocator);
 				break;
 			default:
 				break;
@@ -989,10 +1110,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_LIGHT_POINT:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				light_point_scalar_event(&event);
+				light_point_scalar_event(&event, &world->allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				light_point_end_event(&event);
+				light_point_end_event(&event, &world->allocator);
 				break;
 			default:
 				break;
@@ -1001,10 +1122,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_LIGHT_SPOT:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				light_spot_scalar_event(&event);
+				light_spot_scalar_event(&event, &world->allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				light_spot_end_event(&event);
+				light_spot_end_event(&event, &world->allocator);
 				break;
 			default:
 				break;
@@ -1013,10 +1134,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_LIGHTS:
 			switch (event.type) {
 			case YAML_MAPPING_START_EVENT:
-				lights_scalar_event(&event);
+				lights_scalar_event(&event, &world->allocator);
 				break;
 			case YAML_SEQUENCE_END_EVENT:
-				lights_end_event(&event);
+				lights_end_event(&event, &world->allocator);
 				break;
 			default:
 				break;
@@ -1025,10 +1146,34 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_MATERIAL:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				material_scalar_event(&event);
+				material_scalar_event(&event, &world->allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				material_end_event(&event);
+				material_end_event(&event, &world->allocator);
+				break;
+			default:
+				break;
+			}
+			break;
+		case PARSER_STATE_TYPE_MATERIAL_CONSTANT:
+			switch (event.type) {
+			case YAML_SCALAR_EVENT:
+				material_constant_scalar_event(&event, &world->allocator);
+				break;
+			case YAML_MAPPING_END_EVENT:
+				material_constant_end_event(&event, &world->allocator);
+				break;
+			default:
+				break;
+			}
+			break;
+		case PARSER_STATE_TYPE_MATERIAL_PHONG:
+			switch (event.type) {
+			case YAML_SCALAR_EVENT:
+				material_phong_scalar_event(&event, &world->allocator);
+				break;
+			case YAML_MAPPING_END_EVENT:
+				material_phong_end_event(&event, &world->allocator);
 				break;
 			default:
 				break;
@@ -1037,10 +1182,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_MATERIALS:
 			switch (event.type) {
 			case YAML_MAPPING_START_EVENT:
-				materials_scalar_event(&event);
+				materials_scalar_event(&event, &world->allocator);
 				break;
 			case YAML_SEQUENCE_END_EVENT:
-				materials_end_event(&event);
+				materials_end_event(&event, &world->allocator);
 				break;
 			default:
 				break;
@@ -1062,39 +1207,13 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 				break;
 			}
 			break;
-		case PARSER_STATE_TYPE_RGBA:
-			switch (event.type) {
-			case YAML_SCALAR_EVENT:
-				evpointer++;
-				evstack[evpointer].type = PARSER_STATE_TYPE_FLOAT;
-				evstack[evpointer].ptr  = evstack[evpointer - 1].ptr;
-
-				if (!strcmp((char *) event.data.scalar.value, "r")) {
-					evstack[evpointer].ptr += 0 * sizeof(float);
-				} else if (!strcmp((char *) event.data.scalar.value, "g")) {
-					evstack[evpointer].ptr += 1 * sizeof(float);
-				} else if (!strcmp((char *) event.data.scalar.value, "b")) {
-					evstack[evpointer].ptr += 2 * sizeof(float);
-				} else if (!strcmp((char *) event.data.scalar.value, "a")) {
-					evstack[evpointer].ptr += 3 * sizeof(float);
-				} else {
-					assert(false);
-				}
-				break;
-			case YAML_MAPPING_END_EVENT:
-				evpointer--;
-				break;
-			default:
-				break;
-			}
-			break;
 		case PARSER_STATE_TYPE_NODE:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				node_scalar_event(&event);
+				node_scalar_event(&event, &world->allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				node_end_event(&event);
+				node_end_event(&event, &world->allocator);
 				break;
 			default:
 				break;
@@ -1103,10 +1222,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_NODES:
 			switch (event.type) {
 			case YAML_MAPPING_START_EVENT:
-				nodes_scalar_event(&event);
+				nodes_scalar_event(&event, &world->allocator);
 				break;
 			case YAML_SEQUENCE_END_EVENT:
-				nodes_end_event(&event);
+				nodes_end_event(&event, &world->allocator);
 				break;
 			default:
 				break;
@@ -1141,10 +1260,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_SCENE:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				scene_scalar_event(&event);
+				scene_scalar_event(&event, &world->allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				scene_end_event(&event);
+				scene_end_event(&event, &world->allocator);
 				break;
 			default:
 				break;

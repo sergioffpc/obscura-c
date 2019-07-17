@@ -25,7 +25,7 @@ OBJS := $(patsubst %,$(OBJDIR)/%,$(SOURCES:c=o))
 .PHONY: all
 all: $(PROG)
 ifeq ($(BUILD_DEBUG), 0)
-	strip -s $(PROG)
+	@strip -s $(PROG)
 endif
 
 $(PROG): $(OBJS)
@@ -40,4 +40,4 @@ clean:
 
 .PHONY: distclean
 distclean: clean
-	@$(RM) $(PROG) core
+	@$(RM) $(PROG) core vgcore.*

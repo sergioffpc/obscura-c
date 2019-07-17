@@ -14,20 +14,20 @@ ObscuraCreateMaterial(ObscuraAllocationCallbacks *allocator)
 void
 ObscuraDestroyMaterial(ObscuraMaterial **ptr, ObscuraAllocationCallbacks *allocator)
 {
-	allocator->free((*ptr)->material);
+	allocator->free((*ptr)->effect);
 	allocator->free(*ptr);
 
 	*ptr = NULL;
 }
 
 ObscuraMaterial *
-ObscuraBindMaterial(ObscuraMaterial *material, ObscuraMaterialType type, ObscuraAllocationCallbacks *allocator)
+ObscuraBindEffect(ObscuraMaterial *material, ObscuraMaterialEffectType type, ObscuraAllocationCallbacks *allocator)
 {
 	material->type = type;
 
 	switch (material->type) {
-	case OBSCURA_MATERIAL_TYPE_COLOR:
-		material->material = allocator->allocation(sizeof(ObscuraMaterialColor), 8);
+	case OBSCURA_MATERIAL_EFFECT_TYPE_CONSTANT:
+		material->effect = allocator->allocation(sizeof(ObscuraMaterialConstant), 8);
 		break;
 	default:
 		assert(false);

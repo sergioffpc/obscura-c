@@ -9,14 +9,14 @@
 #include "scene.h"
 
 static void
-traverse(ObscuraNode *node, PFN_ObscuraSceneVisitorFunction visitor, void *arg, ObscuraAllocationCallbacks *allocator)
+traverse(ObscuraNode *node, PFN_ObscuraSceneVisitorFunction visitor, void *arg)
 {
 	for (uint32_t i = 0; i < node->children_count; i++) {
 		ObscuraNode *child = node->children[i];
-		traverse(child, visitor, arg, allocator);
+		traverse(child, visitor, arg);
 	}
 
-	visitor(node, arg, allocator);
+	visitor(node, arg);
 }
 
 ObscuraComponent *
@@ -402,11 +402,10 @@ ObscuraReleaseNode(ObscuraScene *scene, ObscuraNode **ptr, ObscuraAllocationCall
 }
 
 void
-ObscuraTraverseScene(ObscuraScene *scene, PFN_ObscuraSceneVisitorFunction visitor, void *arg,
-	ObscuraAllocationCallbacks *allocator)
+ObscuraTraverseScene(ObscuraScene *scene, PFN_ObscuraSceneVisitorFunction visitor, void *arg)
 {
 	for (uint32_t i = 0; i < scene->nodes_count; i++) {
 		ObscuraNode *node = scene->nodes[i];
-		traverse(node, visitor, arg, allocator);
+		traverse(node, visitor, arg);
 	}
 }

@@ -56,7 +56,6 @@ ObscuraWorkQueue *
 ObscuraCreateWorkQueue(uint32_t threads_capacity, uint32_t tasks_capacity, PFN_ObscuraWaitStrategy wait_strategy,
 	ObscuraAllocationCallbacks *allocator)
 {
-	assert((threads_capacity != 0) && ((threads_capacity & (threads_capacity - 1)) == 0));
 	assert((tasks_capacity != 0) && ((tasks_capacity & (tasks_capacity - 1)) == 0));
 
 	ObscuraWorkQueue *wq = allocator->allocation(sizeof(ObscuraWorkQueue), 8);
@@ -99,12 +98,7 @@ ObscuraDestroyWorkQueue(ObscuraWorkQueue **ptr, ObscuraAllocationCallbacks *allo
 	ObscuraWorkQueue *wq = *ptr;
 
 	wq->running = false;
-	for (uint32_t i = 0; i < wq->threads_capacity; i++) {
-		if (pthread_cancel(wq->threads[i].thread)) {
-			fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, strerror(errno));
-			exit(EXIT_FAILURE);
-		}
-	}
+	ObscuraWaitAll(wq);
 
 	allocator->free((*ptr)->tasks);
 	allocator->free((*ptr)->threads);
@@ -114,7 +108,7 @@ ObscuraDestroyWorkQueue(ObscuraWorkQueue **ptr, ObscuraAllocationCallbacks *allo
 }
 
 void
-ObscuraEnqueueTask(ObscuraWorkQueue *wq, PFN_ObscuraThreadFunction fn, void *arg)
+ObscuraEnqueueTask(ObscuraWorkQueue *wq, PFN_ObscuraTaskFunction fn, void *arg)
 {
 	uint64_t i = wq->tasks_head_cursor;
 	while (__builtin_expect(i >= wq->tasks_tail_cursor + wq->tasks_capacity, 0)) {

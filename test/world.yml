@@ -14,7 +14,7 @@ cameras:
     #   1 - enable the use of supersampling spatial anti-aliasing (SSAA)
     #       technique with stochastic sampling method.
     anti_aliasing:
-      technique: 1
+      technique: 0
       samples_count: 4
 
 
@@ -31,9 +31,21 @@ bounding_volumes:
 ###############################################################################
 materials:
 - &material0
-    color: { r: 1 }
+    constant:
+      emission: { color: { r: 0.5 } }
+      reflective: { color: { r: 1, g: 1, b: 1, a: 1 } }
+      reflectivity: 0
+      transparent: { color: { r: 1, g: 1, b: 1, a: 1 } }
+      transparency: 1
+      index_of_refraction: 0
 - &material1
-    color: { g: 1 }
+    constant:
+      emission: { color: { g: 0.5 } }
+      reflective: { color: { r: 1, g: 1, b: 1, a: 1 } }
+      reflectivity: 0
+      transparent: { color: { r: 1, g: 1, b: 1, a: 1 } }
+      transparency: 1
+      index_of_refraction: 0
 
 
 ###############################################################################
@@ -49,11 +61,8 @@ geometries:
 ###############################################################################
 lights:
 - &light0
-    point:
-      color: { r: 1, g: 1 }
-      constant_attenuation: 1
-      linear_attenuation: 0
-      quadratic_attenuation: 0
+    ambient:
+      color: { r: 0.5, g: 0.5 }
 
 
 ###############################################################################
@@ -70,6 +79,8 @@ nodes:
 -
     components: [ *sphere0, *material1, *ball0 ]
     position: { x: 0.3, y: 0.3, z: -1.2 }
+-
+    components: [ *light0 ]
 
 
 ###############################################################################
