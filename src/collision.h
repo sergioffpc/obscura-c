@@ -11,11 +11,9 @@ extern "C" {
 #endif
 
 typedef enum ObscuraBoundingVolumeType {
-	OBSCURA_BOUNDING_VOLUME_TYPE_BALL,
-	OBSCURA_BOUNDING_VOLUME_TYPE_BOX,
-	OBSCURA_BOUNDING_VOLUME_TYPE_CONE,
-	OBSCURA_BOUNDING_VOLUME_TYPE_FRUSTUM,
+	OBSCURA_BOUNDING_VOLUME_TYPE_AABB,
 	OBSCURA_BOUNDING_VOLUME_TYPE_RAY,
+	OBSCURA_BOUNDING_VOLUME_TYPE_SPHERE,
 } ObscuraBoundingVolumeType;
 
 typedef struct ObscuraBoundingVolume {
@@ -40,31 +38,17 @@ extern void			ObscuraDestroyCollision	(ObscuraCollision **, ObscuraAllocationCal
 
 extern void	ObscuraCollidesWith	(ObscuraBoundingVolume *, vec4, ObscuraBoundingVolume *, vec4, ObscuraCollision *);
 
-typedef struct ObscuraBoundingVolumeBall {
-	float	radius;
-} ObscuraBoundingVolumeBall;
-
-typedef struct ObscuraBoundingVolumeBox {
+typedef struct ObscuraBoundingVolumeAABB {
 	vec4	half_extents;
-} ObscuraBoundingVolumeBox;
-
-typedef struct ObscuraBoundingVolumeCone {
-	float	height;
-	float	radius;
-} ObscuraBoundingVolumeCone;
-
-typedef struct ObscuraBoundingVolumeFrustum {
-	float	bottom;
-	float	left;
-	float	right;
-	float	top;
-	float	near;
-	float	far;
-} ObscuraBoundingVolumeFrustum;
+} ObscuraBoundingVolumeAABB;
 
 typedef struct ObscuraBoundingVolumeRay {
 	vec4	direction;
 } ObscuraBoundingVolumeRay;
+
+typedef struct ObscuraBoundingVolumeSphere {
+	float	radius;
+} ObscuraBoundingVolumeSphere;
 
 #ifdef __cplusplus
 }

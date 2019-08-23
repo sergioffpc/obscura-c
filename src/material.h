@@ -1,8 +1,6 @@
 #ifndef __OBSCURA_MATERIAL_H__
 #define __OBSCURA_MATERIAL_H__ 1
 
-#include <stdint.h>
-
 #include "memory.h"
 #include "tensor.h"
 
@@ -20,10 +18,10 @@ typedef struct ObscuraMaterial {
 	void				*effect;
 } ObscuraMaterial;
 
-extern ObscuraMaterial *	ObscuraCreateMaterial(ObscuraAllocationCallbacks *);
-extern void			ObscuraDestroyMaterial(ObscuraMaterial **, ObscuraAllocationCallbacks *);
+extern ObscuraMaterial *	ObscuraCreateMaterial	(ObscuraAllocationCallbacks *);
+extern void			ObscuraDestroyMaterial	(ObscuraMaterial **, ObscuraAllocationCallbacks *);
 
-extern ObscuraMaterial *	ObscuraBindEffect(ObscuraMaterial *, ObscuraMaterialEffectType, ObscuraAllocationCallbacks *);
+extern ObscuraMaterial *	ObscuraBindEffect	(ObscuraMaterial *, ObscuraMaterialEffectType, ObscuraAllocationCallbacks *);
 
 struct __material_color_or_texture {
 	enum {
@@ -35,13 +33,18 @@ struct __material_color_or_texture {
 	}	value;
 };
 
+typedef struct ObscuraSurfaceAttributes {
+	vec4	emission_color;
+	vec4	ambient_color;
+	vec4	diffuse_color;
+	vec4	specular_color;
+	vec4	shininess;
+} ObscuraSurfaceAttributes;
+
+extern ObscuraSurfaceAttributes	ObscuraSurfaceAttrs	(ObscuraMaterial *, vec4);
+
 /*
  * Produces a constantly shaded surface that is independent of lighting.
- *
- * The reflected color is calculated as:
- *   color = emission + ambient * al
- * where:
- *   al - constant amount of ambient light contribution coming from the scene.
  */
 typedef struct ObscuraMaterialConstant {
 	struct __material_color_or_texture	emission;
@@ -55,15 +58,6 @@ typedef struct ObscuraMaterialConstant {
 /*
  * Produces a shaded surface where the specular reflection is shaded according the Phong BRDF
  * approximation.
- *
- * The phong shader uses the common Phong shading equation, that is:
- *   color = emission + ambient * al + diffuse * max(dot(N, L), 0) + specular * max(dot(R, I, 0)^(shininess)
- * where:
- *   al - constant amount of ambient light contribution coming from the scene.
- *   N  - normal vector.
- *   L  - light vector.
- *   I  - eye vector.
- *   R  - perfect reflection vector.
  */
 typedef struct ObscuraMaterialPhong {
 	struct __material_color_or_texture	emission;

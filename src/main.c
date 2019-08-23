@@ -1,14 +1,17 @@
 #include <sys/types.h>
 #include <sys/shm.h>
+#include <sys/sysinfo.h>
 
 #include <errno.h>
 #include <execinfo.h>
 #include <getopt.h>
 #include <libgen.h>
+#include <malloc.h>
 #include <pthread.h>
 #include <sched.h>
 #include <signal.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,6 +26,7 @@
 #include "camera.h"
 #include "renderer.h"
 #include "scene.h"
+#include "thread.h"
 #include "tensor.h"
 #include "world.h"
 
@@ -38,6 +42,76 @@ sighandler(int signum __attribute__((unused)), siginfo_t *siginfo, void *context
 	backtrace_symbols_fd(buffer, calls, STDERR_FILENO);
 
 	_exit(EXIT_FAILURE);
+}
+
+static void
+memfree(void *ptr)
+{
+	free(ptr);
+}
+
+static void *
+memalloc(size_t size, size_t alignment)
+{
+	void *ptr = NULL;
+
+	switch (posix_memalign(&ptr, alignment, size)) {
+	case EINVAL:
+		fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, "illegal alignment");
+		exit(EXIT_FAILURE);
+		break;
+	case ENOMEM:
+		fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, "out of memory");
+		exit(EXIT_FAILURE);
+		break;
+	}
+
+	explicit_bzero(ptr, size);
+
+	return ptr;
+}
+
+static void *
+memrealloc(void *original, size_t size, size_t alignment)
+{
+	void *ptr = NULL;
+
+	size_t usable_size = malloc_usable_size(original);
+	if (usable_size == 0) {
+		ptr = memalloc(size, alignment);
+	} else if (usable_size > size) {
+		ptr = memalloc(size, alignment);
+		memcpy(ptr, original, usable_size);
+		memfree(original);
+	} else {
+		ptr = realloc(original, size);
+		if (ptr == NULL) {
+			fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, strerror(errno));
+			exit(EXIT_FAILURE);
+		}
+	}
+
+	return ptr;
+}
+
+static ObscuraWorkQueue *workqueue = NULL;
+
+static void
+thrsubmit(PFN_ObscuraTaskFunction start, void *arg)
+{
+	ObscuraEnqueueTask(workqueue, start, arg);
+}
+
+static void
+thrwait()
+{
+	ObscuraWaitAll(workqueue);
+}
+
+static uint32_t
+thrnprocs()
+{
+	return workqueue->threads_capacity;
 }
 
 static void
@@ -95,7 +169,7 @@ loop(Display *display, Window window, ObscuraRenderer *renderer)
 
 		ObscuraDraw(renderer);
 
-		ObscuraFramebuffer *framebuffer = renderer->framebuffer;
+		ObscuraFramebuffer *framebuffer = &renderer->framebuffer;
 		XPutImage(display, window, context, framebuffer->image, 0, 0, 0, 0, framebuffer->width, framebuffer->height);
 
 		struct timespec t1 = {};
@@ -114,10 +188,10 @@ loop(Display *display, Window window, ObscuraRenderer *renderer)
 			free(str);
 		}
 		if (asprintf(&str, "camera:%ld|reflect:%ld|refract:%ld|shadow:%ld",
-				renderer->cast_count[OBSCURA_RENDERER_RAY_TYPE_CAMERA],
-				renderer->cast_count[OBSCURA_RENDERER_RAY_TYPE_REFLECTION],
-				renderer->cast_count[OBSCURA_RENDERER_RAY_TYPE_REFRACTION],
-				renderer->cast_count[OBSCURA_RENDERER_RAY_TYPE_SHADOW]) != -1) {
+				renderer->counters.counter[OBSCURA_COUNTER_TYPE_CAMERA],
+				renderer->counters.counter[OBSCURA_COUNTER_TYPE_REFLECTION],
+				renderer->counters.counter[OBSCURA_COUNTER_TYPE_REFRACTION],
+				renderer->counters.counter[OBSCURA_COUNTER_TYPE_SHADOW]) != -1) {
 			XGCValues gc_values = {
 				.foreground = 0x22ff00,
 			};
@@ -230,27 +304,45 @@ int main(int argc, char **argv) {
 	XSync(display, False);
 	shmctl(shm_info.shmid, IPC_RMID, 0);
 
-	ObscuraWorld *world = ObscuraCreateWorld();
-	ObscuraLoadWorld(world, argv[0]);
-
-	ObscuraFramebuffer framebuffer = {
-		.width  = width,
-		.height = height,
-		.image  = image,
-		.paint  = &putpixel,
-	};
-	ObscuraRenderer renderer = {
-		.world       = world,
-		.framebuffer = &framebuffer,
+	ObscuraAllocationCallbacks allocator = {
+		.allocation   = &memalloc,
+		.reallocation = &memrealloc,
+		.free         = &memfree,
 	};
 
-	loop(display, window, &renderer);
+	ObscuraRenderer *renderer = ObscuraCreateRenderer(&allocator);
+	renderer->world = ObscuraCreateWorld(&allocator);
+	ObscuraLoadWorld(renderer->world, argv[0], &allocator);
 
-	ObscuraUnloadWorld(world);
-	ObscuraDestroyWorld(&world);
+	ObscuraFramebuffer *framebuffer = &renderer->framebuffer;
+	framebuffer->width  = width;
+	framebuffer->height = height;
+	framebuffer->image  = image;
+	framebuffer->paint  = &putpixel;
+
+	const uint32_t threads_capacity = get_nprocs();
+	const uint32_t tasks_capacity   = threads_capacity * threads_capacity;
+	workqueue = ObscuraCreateWorkQueue(threads_capacity, tasks_capacity, &ObscuraYieldWait, &allocator);
+
+	ObscuraExecutionCallbacks executor = {
+		.submit = &thrsubmit,
+		.wait   = &thrwait,
+		.nprocs = &thrnprocs,
+	};
+
+	renderer->allocator = &allocator;
+	renderer->executor  = &executor;
+
+	loop(display, window, renderer);
+
+	ObscuraDestroyWorkQueue(&workqueue, &allocator);
+
+	ObscuraUnloadWorld(renderer->world, &allocator);
+	ObscuraDestroyWorld(&renderer->world, &allocator);
+	ObscuraDestroyRenderer(&renderer, &allocator);
 
 	XShmDetach(display, &shm_info);
-	XFree(framebuffer.image);
+	XFree(framebuffer->image);
 	shmdt(shm_info.shmaddr);
 
 	XDestroyWindow(display, window);

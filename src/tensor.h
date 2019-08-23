@@ -12,12 +12,20 @@ extern "C" {
 #define DEG2RADF(deg)	((float) ((deg) * M_PI / 180))
 #define RAD2DEGF(rad)	((float) ((rad) * 180 / M_PI))
 
+#define COLOR2UINT32(c) \
+	(((uint32_t) (((int) ((c)[0] * 255) & 0xff) << 16) | (((int) ((c)[1] * 255) & 0xff) << 8) | ((int) ((c)[2] * 255) & 0xff)))
+
 /*
  * Declares the storage for a homogenous array of floating-point values.
  */
 typedef __m128	vec4 __attribute__((aligned(16)));
 
-__extern_always_inline float vec4_dot(vec4 const u, vec4 const v) {
+#define VEC4_ZERO (_mm_setzero_ps())
+#define VEC4_ONE  (_mm_set1_ps(1))
+
+__extern_always_inline float
+vec4_dot(vec4 const u, vec4 const v)
+{
 	vec4 const dot = _mm_dp_ps(u, v, 0xf1);
 
 	float res = 0;
@@ -26,7 +34,9 @@ __extern_always_inline float vec4_dot(vec4 const u, vec4 const v) {
 	return res;
 }
 
-__extern_always_inline float vec4_length(vec4 const u) {
+__extern_always_inline float
+vec4_length(vec4 const u)
+{
 	vec4 const dot  = _mm_dp_ps(u, u, 0xff);
 	vec4 const sqrt = _mm_sqrt_ss(dot);
 
@@ -36,7 +46,9 @@ __extern_always_inline float vec4_length(vec4 const u) {
 	return res;
 }
 
-__extern_always_inline float vec4_distance(vec4 const u, vec4 const v) {
+__extern_always_inline float
+vec4_distance(vec4 const u, vec4 const v)
+{
 	vec4 const sub = _mm_sub_ps(u, v);
 
 	float res = vec4_length(sub);
@@ -44,7 +56,9 @@ __extern_always_inline float vec4_distance(vec4 const u, vec4 const v) {
 	return res;
 }
 
-__extern_always_inline vec4 vec4_cross(vec4 const u, vec4 const v) {
+__extern_always_inline vec4
+vec4_cross(vec4 const u, vec4 const v)
+{
 	vec4 const swp0 = _mm_shuffle_ps(u, u, _MM_SHUFFLE(3, 0, 2, 1));
 	vec4 const swp1 = _mm_shuffle_ps(u, u, _MM_SHUFFLE(3, 1, 0, 2));
 	vec4 const swp2 = _mm_shuffle_ps(v, v, _MM_SHUFFLE(3, 0, 2, 1));
@@ -56,12 +70,41 @@ __extern_always_inline vec4 vec4_cross(vec4 const u, vec4 const v) {
 	return res;
 }
 
-__extern_always_inline vec4 vec4_normalize(vec4 const u) {
+__extern_always_inline vec4
+vec4_normalize(vec4 const u)
+{
 	vec4 const dot = _mm_dp_ps(u, u, 0xff);
 	vec4 const isr = _mm_rsqrt_ps(dot);
 	vec4 const res = _mm_mul_ps(u, isr);
 
 	return res;
+}
+
+__extern_always_inline vec4
+vec4_reflect(vec4 const i, vec4 const n)
+{
+	return i - n * vec4_dot(n, i) * 2;
+}
+
+__extern_always_inline vec4
+vec4_refract(vec4 const i, vec4 const n, float eta)
+{
+	float const dot = vec4_dot(n, i);
+	float const k = 1 - eta * eta * (1 - dot * dot);
+
+	return (k >= 0) ? (vec4) (eta * i - (eta * dot + sqrtf(k)) * n) : _mm_setzero_ps();
+}
+
+__extern_always_inline vec4
+vec4_clamp(vec4 const u, vec4 const lo, vec4 const hi)
+{
+	return _mm_min_ps(_mm_max_ps(u, lo), hi);
+}
+
+__extern_always_inline vec4
+vec4_pow(vec4 const a, vec4 const b)
+{
+	return _mm_setr_ps(powf(a[0], b[0]), powf(a[1], b[1]), powf(a[2], b[2]), powf(a[3], b[3]));
 }
 
 /*
@@ -70,21 +113,27 @@ __extern_always_inline vec4 vec4_normalize(vec4 const u) {
  */
 typedef	vec4	mat4[4] __attribute__((aligned(64)));
 
-__extern_always_inline void mat4_add(mat4 const a, mat4 const b, mat4 out) {
+__extern_always_inline void
+mat4_add(mat4 const a, mat4 const b, mat4 out)
+{
 	out[0] = _mm_add_ps(a[0], b[0]);
 	out[1] = _mm_add_ps(a[1], b[1]);
 	out[2] = _mm_add_ps(a[2], b[2]);
 	out[3] = _mm_add_ps(a[3], b[3]);
 }
 
-__extern_always_inline void mat4_sub(mat4 const a, mat4 const b, mat4 out) {
+__extern_always_inline void
+mat4_sub(mat4 const a, mat4 const b, mat4 out)
+{
 	out[0] = _mm_sub_ps(a[0], b[0]);
 	out[1] = _mm_sub_ps(a[1], b[1]);
 	out[2] = _mm_sub_ps(a[2], b[2]);
 	out[3] = _mm_sub_ps(a[3], b[3]);
 }
 
-__extern_always_inline void mat4_mul(mat4 const a, mat4 const b, mat4 out) {
+__extern_always_inline void
+mat4_mul(mat4 const a, mat4 const b, mat4 out)
+{
 	{
 		vec4 const e0 = _mm_shuffle_ps(b[0], b[0], _MM_SHUFFLE(0, 0, 0, 0));
 		vec4 const e1 = _mm_shuffle_ps(b[0], b[0], _MM_SHUFFLE(1, 1, 1, 1));
@@ -158,7 +207,9 @@ __extern_always_inline void mat4_mul(mat4 const a, mat4 const b, mat4 out) {
 	}
 }
 
-__extern_always_inline vec4 mat4_transform(mat4 const a, vec4 const u) {
+__extern_always_inline vec4
+mat4_transform(mat4 const a, vec4 const u)
+{
 	vec4 const v0 = _mm_shuffle_ps(u, u, _MM_SHUFFLE(0, 0, 0, 0));
 	vec4 const v1 = _mm_shuffle_ps(u, u, _MM_SHUFFLE(1, 1, 1, 1));
 	vec4 const v2 = _mm_shuffle_ps(u, u, _MM_SHUFFLE(2, 2, 2, 2));
@@ -176,7 +227,9 @@ __extern_always_inline vec4 mat4_transform(mat4 const a, vec4 const u) {
 	return a2;
 }
 
-__extern_always_inline void mat4_transpose(mat4 const a, mat4 out) {
+__extern_always_inline void
+mat4_transpose(mat4 const a, mat4 out)
+{
 	vec4 const tmp0 = _mm_shuffle_ps(a[0], a[1], 0x44);
 	vec4 const tmp2 = _mm_shuffle_ps(a[0], a[1], 0xee);
 	vec4 const tmp1 = _mm_shuffle_ps(a[2], a[3], 0x44);
@@ -188,7 +241,9 @@ __extern_always_inline void mat4_transpose(mat4 const a, mat4 out) {
 	out[3] = _mm_shuffle_ps(tmp2, tmp3, 0xdd);
 }
 
-__extern_always_inline void mat4_inverse(mat4 const a, mat4 out) {
+__extern_always_inline void
+mat4_inverse(mat4 const a, mat4 out)
+{
 	vec4 fac0;
 	{
 		vec4 const swp0a = _mm_shuffle_ps(a[3], a[2], _MM_SHUFFLE(3, 3, 3, 3));
@@ -328,7 +383,7 @@ __extern_always_inline void mat4_inverse(mat4 const a, mat4 out) {
 	vec4 const row2 = _mm_shuffle_ps(row0, row1, _MM_SHUFFLE(2, 0, 2, 0));
 
 	vec4 const det0 = _mm_dp_ps(a[0], row2, 0xff);
-	vec4 const rcp0 = _mm_div_ps(_mm_set1_ps(1.0f), det0);
+	vec4 const rcp0 = _mm_div_ps(_mm_set1_ps(1), det0);
 
 	out[0] = _mm_mul_ps(inv0, rcp0);
 	out[1] = _mm_mul_ps(inv1, rcp0);
@@ -336,7 +391,9 @@ __extern_always_inline void mat4_inverse(mat4 const a, mat4 out) {
 	out[3] = _mm_mul_ps(inv3, rcp0);
 }
 
-__extern_always_inline void mat4_lookat(const vec4 eye, const vec4 interest, const vec4 up, mat4 out) {
+__extern_always_inline void
+mat4_lookat(const vec4 eye, const vec4 interest, const vec4 up, mat4 out)
+{
 	vec4 const f = vec4_normalize(interest - eye);
 	vec4 const s = vec4_normalize(vec4_cross(f, up));
 	vec4 const u = vec4_cross(s, f);
@@ -362,7 +419,9 @@ __extern_always_inline void mat4_lookat(const vec4 eye, const vec4 interest, con
 	out[3][3] =  1;
 }
 
-__extern_always_inline bool quad_solver(float a, float b, float c, float *x0, float *x1) {
+__extern_always_inline bool
+quad_solver(float a, float b, float c, float *x0, float *x1)
+{
 	float d = b * b - 4 * a * c;
 	if (d < 0) {
 		return false;
@@ -381,6 +440,28 @@ __extern_always_inline bool quad_solver(float a, float b, float c, float *x0, fl
 	}
 
 	return true;
+}
+
+__extern_always_inline float
+clampf(float f, float lo, float hi)
+{
+	return fmin(fmax(f, lo), hi);
+}
+
+__extern_always_inline vec4
+blend(vec4 u, vec4 v)
+{
+	float const c_a = u[3] + v[3] * (1 - u[3]);
+
+	if (__builtin_expect(c_a < 0, 0)) {
+		return VEC4_ZERO;
+	} else {
+		float const c_r = (u[0] * u[3] + v[0] * v[3] * (1 - u[3])) / c_a;
+		float const c_g = (u[1] * u[3] + v[1] * v[3] * (1 - u[3])) / c_a;
+		float const c_b = (u[2] * u[3] + v[2] * v[3] * (1 - u[3])) / c_a;
+
+		return _mm_set_ps(c_r, c_g, c_b, c_a);
+	}
 }
 
 #ifdef __cplusplus

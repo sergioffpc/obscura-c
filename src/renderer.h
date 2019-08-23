@@ -5,7 +5,9 @@
 
 #include "collision.h"
 #include "memory.h"
+#include "stat.h"
 #include "tensor.h"
+#include "thread.h"
 #include "world.h"
 
 #ifdef __cplusplus
@@ -27,8 +29,6 @@ typedef enum ObscuraRendererRayType {
 	OBSCURA_RENDERER_RAY_TYPE_REFLECTION,
 	OBSCURA_RENDERER_RAY_TYPE_REFRACTION,
 	OBSCURA_RENDERER_RAY_TYPE_SHADOW,
-
-	__RENDERER_RAY_TYPE_NUM_ELEMS,
 } ObscuraRendererRayType;
 
 typedef struct ObscuraRendererRay {
@@ -43,11 +43,22 @@ extern void			ObscuraDestroyRendererRay	(ObscuraRendererRay **, ObscuraAllocatio
 extern ObscuraRendererRay *	ObscuraBindRay	(ObscuraRendererRay *, ObscuraRendererRayType, ObscuraAllocationCallbacks *);
 
 typedef struct ObscuraRenderer {
-	uint64_t	cast_count[__RENDERER_RAY_TYPE_NUM_ELEMS];
+	ObscuraCounters		counters;
+
+	ObscuraAllocationCallbacks	*allocator;
+	ObscuraExecutionCallbacks	*executor;
+
+	ObscuraFramebuffer	framebuffer;
 
 	ObscuraWorld		*world;
-	ObscuraFramebuffer	*framebuffer;
+
+	uint32_t	  lights_capacity;
+	uint32_t	  lights_count;
+	ObscuraNode	**lights;
 } ObscuraRenderer;
+
+extern ObscuraRenderer *	ObscuraCreateRenderer	(ObscuraAllocationCallbacks *);
+extern void			ObscuraDestroyRenderer	(ObscuraRenderer **, ObscuraAllocationCallbacks *);
 
 extern void ObscuraDraw	(ObscuraRenderer *)	__attribute__((hot));
 

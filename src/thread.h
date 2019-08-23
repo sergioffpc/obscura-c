@@ -13,6 +13,18 @@ extern "C" {
 
 typedef void *	(*PFN_ObscuraTaskFunction)	(void *);
 
+typedef void	(*PFN_ObscuraSubmitFunction)	(PFN_ObscuraTaskFunction, void *);
+typedef void	(*PFN_ObscuraWaitFunction)		(void);
+
+typedef uint32_t	(*PFN_ObscuraProcessorCountFunction)	(void);
+
+typedef struct ObscuraExecutionCallbacks {
+	PFN_ObscuraSubmitFunction	submit;
+	PFN_ObscuraWaitFunction		wait;
+
+	PFN_ObscuraProcessorCountFunction	nprocs;
+} ObscuraExecutionCallbacks;
+
 struct __work_queue_task {
 	PFN_ObscuraTaskFunction	 func;
 	void			*arg;

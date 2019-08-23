@@ -21,9 +21,9 @@ cameras:
 ###############################################################################
 # Provides a library in which to place bounding volume elements.
 ###############################################################################
-bounding_volumes:
-- &ball0
-    ball: { radius: 1 }
+bounds:
+- &bound0
+    sphere: { radius: 1 }
 
 
 ###############################################################################
@@ -31,19 +31,20 @@ bounding_volumes:
 ###############################################################################
 materials:
 - &material0
-    constant:
-      emission: { color: { r: 0.5 } }
-      reflective: { color: { r: 1, g: 1, b: 1, a: 1 } }
+    phong:
+      emission: { color: { r: 0, g: 0, b: 0, a: 1 } }
+      diffuse: { color: { r: 1, g: 1, b: 0, a: 0.5 } }
+      reflective: { color: { r: 0, g: 0, b: 0, a: 1 } }
       reflectivity: 0
-      transparent: { color: { r: 1, g: 1, b: 1, a: 1 } }
+      transparent: { color: { r: 0, g: 0, b: 0, a: 1 } }
       transparency: 1
       index_of_refraction: 0
 - &material1
     constant:
-      emission: { color: { g: 0.5 } }
-      reflective: { color: { r: 1, g: 1, b: 1, a: 1 } }
+      emission: { color: { r: 0.5, g: 0.5, b: 0.5, a: 0.5 } }
+      reflective: { color: { r: 0, g: 0, b: 0, a: 1 } }
       reflectivity: 0
-      transparent: { color: { r: 1, g: 1, b: 1, a: 1 } }
+      transparent: { color: { r: 0, g: 0, b: 0, a: 1 } }
       transparency: 1
       index_of_refraction: 0
 
@@ -52,7 +53,7 @@ materials:
 # Provides a library in which to place geometry elements.
 ###############################################################################
 geometries:
-- &sphere0
+- &geometry0
     sphere: { radius: 1 }
 
 
@@ -61,30 +62,33 @@ geometries:
 ###############################################################################
 lights:
 - &light0
-    ambient:
-      color: { r: 0.5, g: 0.5 }
+    directional:
+      color: { r: 1, g: 1, b: 0, a: 1 }
+      direction: { z: 1 }
 
 
 ###############################################################################
 # Provides a library in which to place node elements.
 ###############################################################################
 nodes:
-- &camera_node0
+- &node0
     components: [ *camera0 ]
     position: { z: 1 }
+    interest: { x: 0, y: 0, z: 0 }
     up: { y: 1 }
 -
-    components: [ *sphere0, *material0, *ball0 ]
+    components: [ *geometry0, *material0, *bound0 ]
     position: { z: -1 }
 -
-    components: [ *sphere0, *material1, *ball0 ]
+    components: [ *geometry0, *material0, *bound0 ]
     position: { x: 0.3, y: 0.3, z: -1.2 }
 -
     components: [ *light0 ]
+    position: { z: -1 }
 
 
 ###############################################################################
 # Refers to a node that contains a camera describing the viewpoint from which
 # to render.
 ###############################################################################
-view: *camera_node0
+view: *node0

@@ -1,8 +1,5 @@
-#include <sys/sysinfo.h>
-
 #include <assert.h>
-#include <errno.h>
-#include <malloc.h>
+#include <float.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -20,56 +17,6 @@
 #include "thread.h"
 #include "world.h"
 
-static void
-mem_free(void *ptr)
-{
-	free(ptr);
-}
-
-static void *
-mem_alloc(size_t size, size_t alignment)
-{
-	void *ptr = NULL;
-
-	switch (posix_memalign(&ptr, alignment, size)) {
-	case EINVAL:
-		fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, "illegal alignment");
-		exit(EXIT_FAILURE);
-		break;
-	case ENOMEM:
-		fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, "out of memory");
-		exit(EXIT_FAILURE);
-		break;
-	}
-
-	explicit_bzero(ptr, size);
-
-	return ptr;
-}
-
-static void *
-mem_realloc(void *original, size_t size, size_t alignment)
-{
-	void *ptr = NULL;
-
-	size_t usable_size = malloc_usable_size(original);
-	if (usable_size == 0) {
-		ptr = mem_alloc(size, alignment);
-	} else if (usable_size > size) {
-		ptr = mem_alloc(size, alignment);
-		memcpy(ptr, original, usable_size);
-		mem_free(original);
-	} else {
-		ptr = realloc(original, size);
-		if (ptr == NULL) {
-			fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, strerror(errno));
-			exit(EXIT_FAILURE);
-		}
-	}
-
-	return ptr;
-}
-
 #define PARSER_STATE_CAPACITY	256
 static struct parser_state {
 	enum {
@@ -78,8 +25,8 @@ static struct parser_state {
 		PARSER_STATE_TYPE_CAMERA_PERSPECTIVE,
 		PARSER_STATE_TYPE_CAMERAS,
 		PARSER_STATE_TYPE_BOUNDING_VOLUME,
-		PARSER_STATE_TYPE_BOUNDING_VOLUME_BALL,
-		PARSER_STATE_TYPE_BOUNDING_VOLUME_BOX,
+		PARSER_STATE_TYPE_BOUNDING_VOLUME_AABB,
+		PARSER_STATE_TYPE_BOUNDING_VOLUME_SPHERE,
 		PARSER_STATE_TYPE_BOUNDING_VOLUMES,
 		PARSER_STATE_TYPE_COLOR,
 		PARSER_STATE_TYPE_COLOR_OR_TEXTURE,
@@ -220,20 +167,20 @@ cameras_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocation
 }
 
 static void
-bounding_volume_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocator)
+bounds_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocator)
 {
 	ObscuraBoundingVolume *volume = evstack[evpointer].ptr;
 
 	evpointer++;
-	if (!strcmp((char *) event->data.scalar.value, "ball")) {
-		ObscuraBindBoundingVolume(volume, OBSCURA_BOUNDING_VOLUME_TYPE_BALL, allocator);
+	if (!strcmp((char *) event->data.scalar.value, "aabb")) {
+		ObscuraBindBoundingVolume(volume, OBSCURA_BOUNDING_VOLUME_TYPE_AABB, allocator);
 
-		evstack[evpointer].type = PARSER_STATE_TYPE_BOUNDING_VOLUME_BALL;
+		evstack[evpointer].type = PARSER_STATE_TYPE_BOUNDING_VOLUME_AABB;
 		evstack[evpointer].ptr  = volume;
-	} else if (!strcmp((char *) event->data.scalar.value, "box")) {
-		ObscuraBindBoundingVolume(volume, OBSCURA_BOUNDING_VOLUME_TYPE_BOX, allocator);
+	} else if (!strcmp((char *) event->data.scalar.value, "sphere")) {
+		ObscuraBindBoundingVolume(volume, OBSCURA_BOUNDING_VOLUME_TYPE_SPHERE, allocator);
 
-		evstack[evpointer].type = PARSER_STATE_TYPE_BOUNDING_VOLUME_BOX;
+		evstack[evpointer].type = PARSER_STATE_TYPE_BOUNDING_VOLUME_SPHERE;
 		evstack[evpointer].ptr  = volume;
 	} else {
 		assert(false);
@@ -241,13 +188,13 @@ bounding_volume_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *al
 }
 
 static void
-bounding_volume_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
+bounds_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	evpointer--;
 }
 
 static void
-bounding_volume_ball_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocator __attribute__((unused)))
+bounds_sphere_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	ObscuraBoundingVolume *volume = evstack[evpointer].ptr;
 
@@ -255,20 +202,20 @@ bounding_volume_ball_scalar_event(yaml_event_t *event, ObscuraAllocationCallback
 	evstack[evpointer].type = PARSER_STATE_TYPE_FLOAT;
 
 	if (!strcmp((char *) event->data.scalar.value, "radius")) {
-		evstack[evpointer].ptr = &((ObscuraBoundingVolumeBall *) volume->volume)->radius;
+		evstack[evpointer].ptr = &((ObscuraBoundingVolumeSphere *) volume->volume)->radius;
 	} else {
 		assert(false);
 	}
 }
 
 static void
-bounding_volume_ball_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
+bounds_sphere_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	evpointer--;
 }
 
 static void
-bounding_volume_box_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocator __attribute__((unused)))
+bounds_aabb_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	ObscuraBoundingVolume *volume = evstack[evpointer].ptr;
 
@@ -276,14 +223,14 @@ bounding_volume_box_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks
 	evstack[evpointer].type = PARSER_STATE_TYPE_VECTOR4;
 
 	if (!strcmp((char *) event->data.scalar.value, "half_extents")) {
-		evstack[evpointer].ptr = &((ObscuraBoundingVolumeBox *) volume->volume)->half_extents;
+		evstack[evpointer].ptr = &((ObscuraBoundingVolumeAABB *) volume->volume)->half_extents;
 	} else {
 		assert(false);
 	}
 }
 
 static void
-bounding_volume_box_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
+bounds_aabb_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
 	evpointer--;
 }
@@ -323,8 +270,8 @@ components_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocat
 
 	for (int i = 0; i < anchoridx + 1; i++) {
 		if (!strcmp(anchors[i].name, (char *) event->data.alias.anchor)) {
-			ObscuraAttachComponent(node, anchors[i].ptr);
-			break;
+			ObscuraComponent *component = anchors[i].ptr;
+			ObscuraAttachComponent(node, component);
 		}
 	}
 }
@@ -482,6 +429,10 @@ light_directional_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *
 static void
 light_directional_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
+	ObscuraLight *light = evstack[evpointer].ptr;
+	ObscuraLightDirectional *source = (ObscuraLightDirectional *) light->source;
+	source->direction = vec4_normalize(source->direction);
+
 	evpointer--;
 }
 
@@ -549,6 +500,10 @@ light_spot_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocat
 static void
 light_spot_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCallbacks *allocator __attribute__((unused)))
 {
+	ObscuraLight *light = evstack[evpointer].ptr;
+	ObscuraLightSpot *source = (ObscuraLightSpot *) light->source;
+	source->direction = vec4_normalize(source->direction);
+
 	evpointer--;
 }
 
@@ -778,7 +733,7 @@ scene_scalar_event(yaml_event_t *event, ObscuraAllocationCallbacks *allocator __
 	if (!strcmp((char *) event->data.scalar.value, "cameras")) {
 		evstack[evpointer].type = PARSER_STATE_TYPE_CAMERAS;
 		evstack[evpointer].ptr  = scene;
-	} else if (!strcmp((char *) event->data.scalar.value, "bounding_volumes")) {
+	} else if (!strcmp((char *) event->data.scalar.value, "bounds")) {
 		evstack[evpointer].type = PARSER_STATE_TYPE_BOUNDING_VOLUMES;
 		evstack[evpointer].ptr  = scene;
 	} else if (!strcmp((char *) event->data.scalar.value, "materials")) {
@@ -808,31 +763,23 @@ scene_end_event(yaml_event_t *event __attribute__((unused)), ObscuraAllocationCa
 }
 
 ObscuraWorld *
-ObscuraCreateWorld()
+ObscuraCreateWorld(ObscuraAllocationCallbacks *allocator)
 {
-	ObscuraWorld *world = mem_alloc(sizeof(ObscuraWorld), 8);
-	world->allocator.allocation   = &mem_alloc;
-	world->allocator.reallocation = &mem_realloc;
-	world->allocator.free         = &mem_free;
-
-	world->work_queue = ObscuraCreateWorkQueue(get_nprocs(), 256, &ObscuraBusySpinWait, &world->allocator);
+	ObscuraWorld *world = allocator->allocation(sizeof(ObscuraWorld), 8);
 
 	return world;
 }
 
 void
-ObscuraDestroyWorld(ObscuraWorld **ptr)
+ObscuraDestroyWorld(ObscuraWorld **ptr, ObscuraAllocationCallbacks *allocator)
 {
-	ObscuraWorld *world = *ptr;
-	ObscuraDestroyWorkQueue(&world->work_queue, &world->allocator);
-
-	mem_free(*ptr);
+	allocator->free(*ptr);
 
 	*ptr = NULL;
 }
 
 void
-ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
+ObscuraLoadWorld(ObscuraWorld *world, const char *filename, ObscuraAllocationCallbacks *allocator)
 {
 	yaml_parser_t parser;
 	yaml_parser_initialize(&parser);
@@ -846,7 +793,7 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 	}
 	yaml_parser_set_input_file(&parser, file);
 
-	world->scene = ObscuraCreateScene(&world->allocator);
+	world->scene = ObscuraCreateScene(allocator);
 	assert(world->scene);
 
 	evpointer = 0;
@@ -863,10 +810,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_CAMERA:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				camera_scalar_event(&event, &world->allocator);
+				camera_scalar_event(&event, allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				camera_end_event(&event, &world->allocator);
+				camera_end_event(&event, allocator);
 				break;
 			default:
 				break;
@@ -875,10 +822,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_CAMERA_ANTI_ALIASING:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				camera_anti_aliasing_scalar_event(&event, &world->allocator);
+				camera_anti_aliasing_scalar_event(&event, allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				camera_anti_aliasing_end_event(&event, &world->allocator);
+				camera_anti_aliasing_end_event(&event, allocator);
 				break;
 			default:
 				break;
@@ -887,10 +834,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_CAMERA_PERSPECTIVE:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				camera_perspective_scalar_event(&event, &world->allocator);
+				camera_perspective_scalar_event(&event, allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				camera_perspective_end_event(&event, &world->allocator);
+				camera_perspective_end_event(&event, allocator);
 				break;
 			default:
 				break;
@@ -899,10 +846,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_CAMERAS:
 			switch (event.type) {
 			case YAML_MAPPING_START_EVENT:
-				cameras_scalar_event(&event, &world->allocator);
+				cameras_scalar_event(&event, allocator);
 				break;
 			case YAML_SEQUENCE_END_EVENT:
-				cameras_end_event(&event, &world->allocator);
+				cameras_end_event(&event, allocator);
 				break;
 			default:
 				break;
@@ -911,34 +858,34 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_BOUNDING_VOLUME:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				bounding_volume_scalar_event(&event, &world->allocator);
+				bounds_scalar_event(&event, allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				bounding_volume_end_event(&event, &world->allocator);
+				bounds_end_event(&event, allocator);
 				break;
 			default:
 				break;
 			}
 			break;
-		case PARSER_STATE_TYPE_BOUNDING_VOLUME_BALL:
+		case PARSER_STATE_TYPE_BOUNDING_VOLUME_AABB:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				bounding_volume_ball_scalar_event(&event, &world->allocator);
+				bounds_aabb_scalar_event(&event, allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				bounding_volume_ball_end_event(&event, &world->allocator);
+				bounds_aabb_end_event(&event, allocator);
 				break;
 			default:
 				break;
 			}
 			break;
-		case PARSER_STATE_TYPE_BOUNDING_VOLUME_BOX:
+		case PARSER_STATE_TYPE_BOUNDING_VOLUME_SPHERE:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				bounding_volume_box_scalar_event(&event, &world->allocator);
+				bounds_sphere_scalar_event(&event, allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				bounding_volume_box_end_event(&event, &world->allocator);
+				bounds_sphere_end_event(&event, allocator);
 				break;
 			default:
 				break;
@@ -947,10 +894,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_BOUNDING_VOLUMES:
 			switch (event.type) {
 			case YAML_MAPPING_START_EVENT:
-				bounding_volumes_scalar_event(&event, &world->allocator);
+				bounding_volumes_scalar_event(&event, allocator);
 				break;
 			case YAML_SEQUENCE_END_EVENT:
-				bounding_volumes_end_event(&event, &world->allocator);
+				bounding_volumes_end_event(&event, allocator);
 				break;
 			default:
 				break;
@@ -1006,10 +953,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_COMPONENTS:
 			switch (event.type) {
 			case YAML_ALIAS_EVENT:
-				components_scalar_event(&event, &world->allocator);
+				components_scalar_event(&event, allocator);
 				break;
 			case YAML_SEQUENCE_END_EVENT:
-				components_end_event(&event, &world->allocator);
+				components_end_event(&event, allocator);
 				break;
 			default:
 				break;
@@ -1038,10 +985,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_GEOMETRY:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				geometry_scalar_event(&event, &world->allocator);
+				geometry_scalar_event(&event, allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				geometry_end_event(&event, &world->allocator);
+				geometry_end_event(&event, allocator);
 				break;
 			default:
 				break;
@@ -1050,10 +997,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_GEOMETRY_SPHERE:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				geometry_sphere_scalar_event(&event, &world->allocator);
+				geometry_sphere_scalar_event(&event, allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				geometry_sphere_end_event(&event, &world->allocator);
+				geometry_sphere_end_event(&event, allocator);
 				break;
 			default:
 				break;
@@ -1062,10 +1009,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_GEOMETRIES:
 			switch (event.type) {
 			case YAML_MAPPING_START_EVENT:
-				geometries_scalar_event(&event, &world->allocator);
+				geometries_scalar_event(&event, allocator);
 				break;
 			case YAML_SEQUENCE_END_EVENT:
-				geometries_end_event(&event, &world->allocator);
+				geometries_end_event(&event, allocator);
 				break;
 			default:
 				break;
@@ -1074,10 +1021,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_LIGHT:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				light_scalar_event(&event, &world->allocator);
+				light_scalar_event(&event, allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				light_end_event(&event, &world->allocator);
+				light_end_event(&event, allocator);
 				break;
 			default:
 				break;
@@ -1086,10 +1033,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_LIGHT_AMBIENT:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				light_ambient_scalar_event(&event, &world->allocator);
+				light_ambient_scalar_event(&event, allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				light_ambient_end_event(&event, &world->allocator);
+				light_ambient_end_event(&event, allocator);
 				break;
 			default:
 				break;
@@ -1098,10 +1045,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_LIGHT_DIRECTIONAL:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				light_directional_scalar_event(&event, &world->allocator);
+				light_directional_scalar_event(&event, allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				light_directional_end_event(&event, &world->allocator);
+				light_directional_end_event(&event, allocator);
 				break;
 			default:
 				break;
@@ -1110,10 +1057,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_LIGHT_POINT:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				light_point_scalar_event(&event, &world->allocator);
+				light_point_scalar_event(&event, allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				light_point_end_event(&event, &world->allocator);
+				light_point_end_event(&event, allocator);
 				break;
 			default:
 				break;
@@ -1122,10 +1069,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_LIGHT_SPOT:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				light_spot_scalar_event(&event, &world->allocator);
+				light_spot_scalar_event(&event, allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				light_spot_end_event(&event, &world->allocator);
+				light_spot_end_event(&event, allocator);
 				break;
 			default:
 				break;
@@ -1134,10 +1081,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_LIGHTS:
 			switch (event.type) {
 			case YAML_MAPPING_START_EVENT:
-				lights_scalar_event(&event, &world->allocator);
+				lights_scalar_event(&event, allocator);
 				break;
 			case YAML_SEQUENCE_END_EVENT:
-				lights_end_event(&event, &world->allocator);
+				lights_end_event(&event, allocator);
 				break;
 			default:
 				break;
@@ -1146,10 +1093,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_MATERIAL:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				material_scalar_event(&event, &world->allocator);
+				material_scalar_event(&event, allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				material_end_event(&event, &world->allocator);
+				material_end_event(&event, allocator);
 				break;
 			default:
 				break;
@@ -1158,10 +1105,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_MATERIAL_CONSTANT:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				material_constant_scalar_event(&event, &world->allocator);
+				material_constant_scalar_event(&event, allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				material_constant_end_event(&event, &world->allocator);
+				material_constant_end_event(&event, allocator);
 				break;
 			default:
 				break;
@@ -1170,10 +1117,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_MATERIAL_PHONG:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				material_phong_scalar_event(&event, &world->allocator);
+				material_phong_scalar_event(&event, allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				material_phong_end_event(&event, &world->allocator);
+				material_phong_end_event(&event, allocator);
 				break;
 			default:
 				break;
@@ -1182,10 +1129,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_MATERIALS:
 			switch (event.type) {
 			case YAML_MAPPING_START_EVENT:
-				materials_scalar_event(&event, &world->allocator);
+				materials_scalar_event(&event, allocator);
 				break;
 			case YAML_SEQUENCE_END_EVENT:
-				materials_end_event(&event, &world->allocator);
+				materials_end_event(&event, allocator);
 				break;
 			default:
 				break;
@@ -1210,10 +1157,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_NODE:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				node_scalar_event(&event, &world->allocator);
+				node_scalar_event(&event, allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				node_end_event(&event, &world->allocator);
+				node_end_event(&event, allocator);
 				break;
 			default:
 				break;
@@ -1222,10 +1169,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_NODES:
 			switch (event.type) {
 			case YAML_MAPPING_START_EVENT:
-				nodes_scalar_event(&event, &world->allocator);
+				nodes_scalar_event(&event, allocator);
 				break;
 			case YAML_SEQUENCE_END_EVENT:
-				nodes_end_event(&event, &world->allocator);
+				nodes_end_event(&event, allocator);
 				break;
 			default:
 				break;
@@ -1260,10 +1207,10 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 		case PARSER_STATE_TYPE_SCENE:
 			switch (event.type) {
 			case YAML_SCALAR_EVENT:
-				scene_scalar_event(&event, &world->allocator);
+				scene_scalar_event(&event, allocator);
 				break;
 			case YAML_MAPPING_END_EVENT:
-				scene_end_event(&event, &world->allocator);
+				scene_end_event(&event, allocator);
 				break;
 			default:
 				break;
@@ -1284,9 +1231,9 @@ ObscuraLoadWorld(ObscuraWorld *world, const char *filename)
 }
 
 void
-ObscuraUnloadWorld(ObscuraWorld *world)
+ObscuraUnloadWorld(ObscuraWorld *world, ObscuraAllocationCallbacks *allocator)
 {
-	ObscuraDestroyScene(&world->scene, &world->allocator);
+	ObscuraDestroyScene(&world->scene, allocator);
 
 	explicit_bzero(evstack, sizeof(struct parser_state));
 	evpointer = -1;

@@ -1,11 +1,12 @@
 PROG := obscura
 
-SOURCES := camera.c collision.c geometry.c light.c main.c material.c renderer.c scene.c thread.c world.c
+SOURCES := camera.c collision.c geometry.c light.c main.c material.c renderer.c scene.c shade.c thread.c \
+	visibility.c world.c
 
 OBJDIR := build
 SRCDIR := src
 
-CFLAGS	 ?= -std=gnu11 -Wall -Wextra -msse4.1
+CFLAGS	 ?= -std=gnu11 -Wall -Wextra -msse -msse4.1
 CPPFLAGS ?= -I$(SRCDIR) -D_GNU_SOURCE -DLEVEL1_DCACHE_LINESIZE=$(shell getconf LEVEL1_DCACHE_LINESIZE) \
 	-DPAGESIZE=$(shell getconf PAGESIZE)
 LDFLAGS	 ?= -L$(SRCDIR) -rdynamic -pthread
