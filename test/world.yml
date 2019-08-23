@@ -32,11 +32,14 @@ bounds:
 materials:
 - &material0
     phong:
-      emission: { color: { r: 0, g: 0, b: 0, a: 1 } }
-      diffuse: { color: { r: 1, g: 1, b: 0, a: 0.5 } }
-      reflective: { color: { r: 0, g: 0, b: 0, a: 1 } }
+      emission: { color: { r: 0, g: 0, b: 0, a: 0 } }
+      ambient: { color: { r: 0, g: 0, b: 0, a: 0 } }
+      diffuse: { color: { r: 1, g: 1, b: 1, a: 1 } }
+      specular: { color: { r: 0, g: 0, b: 0, a: 0 } }
+      shininess: { color: { r: 0, g: 0, b: 0, a: 0 } }
+      reflective: { color: { r: 0, g: 0, b: 0, a: 0 } }
       reflectivity: 0
-      transparent: { color: { r: 0, g: 0, b: 0, a: 1 } }
+      transparent: { color: { r: 0, g: 0, b: 0, a: 0 } }
       transparency: 1
       index_of_refraction: 0
 - &material1
@@ -63,7 +66,7 @@ geometries:
 lights:
 - &light0
     directional:
-      color: { r: 1, g: 1, b: 0, a: 1 }
+      color: { r: 1, g: 0, b: 0, a: 1 }
       direction: { z: 1 }
 
 

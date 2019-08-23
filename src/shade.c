@@ -9,22 +9,25 @@ static vec4
 enlighten(ObscuraSurfaceAttributes surface, vec4 normal, vec4 intersect, ObscuraLight *light, vec4 position, vec4 eye)
 {
 	vec4 color = {};
+	color = blend(surface.emission_color, surface.ambient_color);
 
 	switch (light->type) {
 	case OBSCURA_LIGHT_SOURCE_TYPE_AMBIENT:
-		color = blend(surface.emission_color + surface.ambient_color, ((ObscuraLightAmbient *) light->source)->color);
+		color = blend(color, ((ObscuraLightAmbient *) light->source)->color);
 		break;
 	case OBSCURA_LIGHT_SOURCE_TYPE_DIRECTIONAL:
 	{
 		ObscuraLightDirectional *directional = light->source;
 
 		surface.diffuse_color *= clampf(vec4_dot(normal, directional->direction), 0, 1);
+		color = blend(color, surface.diffuse_color);
 
 		vec4 reflection = vec4_reflect(directional->direction, normal);
 		surface.specular_color *= clampf(vec4_dot(reflection, eye), 0, 1);
 		surface.specular_color = vec4_pow(surface.specular_color, 1 - surface.shininess);
+		color = blend(color, surface.specular_color);
 
-		color = blend(surface.emission_color + surface.ambient_color + surface.diffuse_color + surface.specular_color, directional->color);
+		color = blend(color, directional->color);
 	}
 		break;
 	case OBSCURA_LIGHT_SOURCE_TYPE_POINT:
@@ -33,13 +36,15 @@ enlighten(ObscuraSurfaceAttributes surface, vec4 normal, vec4 intersect, Obscura
 
 		vec4 direction = vec4_normalize(position - intersect);
 		surface.diffuse_color *= clampf(vec4_dot(normal, direction), 0, 1);
+		color = blend(color, surface.diffuse_color);
 
 		vec4 reflection = vec4_reflect(direction, normal);
 		surface.specular_color *= clampf(vec4_dot(reflection, eye), 0, 1);
 		surface.specular_color = vec4_pow(surface.specular_color, 1 - surface.shininess);
+		color = blend(color, surface.specular_color);
 
 		float attenuation = OBSCURA_LIGHT_ATTENUATION(point, vec4_distance(intersect, position));
-		color = blend(surface.emission_color + surface.ambient_color + surface.diffuse_color + surface.specular_color, point->color / attenuation);
+		color = blend(color, point->color / attenuation);
 	}
 		break;
 	case OBSCURA_LIGHT_SOURCE_TYPE_SPOT:
@@ -47,13 +52,15 @@ enlighten(ObscuraSurfaceAttributes surface, vec4 normal, vec4 intersect, Obscura
 		ObscuraLightSpot *spot = ((ObscuraLightSpot *) light->source);
 
 		surface.diffuse_color *= clampf(vec4_dot(normal, spot->direction), 0, 1);
+		color = blend(color, surface.diffuse_color);
 
 		vec4 reflection = vec4_reflect(spot->direction, normal);
 		surface.specular_color *= clampf(vec4_dot(reflection, eye), 0, 1);
 		surface.specular_color = vec4_pow(surface.specular_color, 1 - surface.shininess);
+		color = blend(color, surface.specular_color);
 
 		float attenuation = OBSCURA_LIGHT_ATTENUATION(spot, vec4_distance(intersect, position));
-		color = blend(surface.emission_color + surface.ambient_color + surface.diffuse_color + surface.specular_color, spot->color / attenuation);
+		color = blend(color, spot->color / attenuation);
 	}
 		break;
 	default:

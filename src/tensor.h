@@ -453,14 +453,14 @@ blend(vec4 u, vec4 v)
 {
 	float const c_a = u[3] + v[3] * (1 - u[3]);
 
-	if (__builtin_expect(c_a < 0, 0)) {
+	if (__builtin_expect(c_a <= 0, 0)) {
 		return VEC4_ZERO;
 	} else {
 		float const c_r = (u[0] * u[3] + v[0] * v[3] * (1 - u[3])) / c_a;
 		float const c_g = (u[1] * u[3] + v[1] * v[3] * (1 - u[3])) / c_a;
 		float const c_b = (u[2] * u[3] + v[2] * v[3] * (1 - u[3])) / c_a;
 
-		return _mm_set_ps(c_r, c_g, c_b, c_a);
+		return _mm_set_ps(c_a, c_b, c_g, c_r);
 	}
 }
 
