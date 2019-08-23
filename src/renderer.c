@@ -30,35 +30,35 @@ overcast(ObscuraRenderer *renderer, ObscuraLight *light, vec4 position, vec4 int
 
 	ObscuraVisible occlusion = {};
 
-    switch (light->type) {
-    case OBSCURA_LIGHT_SOURCE_TYPE_AMBIENT:
-        break;
-    case OBSCURA_LIGHT_SOURCE_TYPE_DIRECTIONAL:
+	switch (light->type) {
+	case OBSCURA_LIGHT_SOURCE_TYPE_AMBIENT:
+		break;
+	case OBSCURA_LIGHT_SOURCE_TYPE_DIRECTIONAL:
 		__sync_fetch_and_add(&renderer->counters.counter[OBSCURA_COUNTER_TYPE_SHADOW], 1);
 
-        bounds.direction = ((ObscuraLightDirectional *) light->source)->direction;
+		bounds.direction = ((ObscuraLightDirectional *) light->source)->direction;
 
-        occlusion = ObscuraTraceRay(scene, ray.position, ray.volume);
-        break;
-    case OBSCURA_LIGHT_SOURCE_TYPE_POINT:
+		occlusion = ObscuraTraceRay(scene, ray.position, ray.volume);
+		break;
+	case OBSCURA_LIGHT_SOURCE_TYPE_POINT:
 		__sync_fetch_and_add(&renderer->counters.counter[OBSCURA_COUNTER_TYPE_SHADOW], 1);
 
-        bounds.direction = position - intersect;
-        bounds.direction = vec4_normalize(bounds.direction);
+		bounds.direction = position - intersect;
+		bounds.direction = vec4_normalize(bounds.direction);
 
-        occlusion = ObscuraTraceRay(scene, ray.position, ray.volume);
-        break;
-    case OBSCURA_LIGHT_SOURCE_TYPE_SPOT:
+		occlusion = ObscuraTraceRay(scene, ray.position, ray.volume);
+		break;
+	case OBSCURA_LIGHT_SOURCE_TYPE_SPOT:
 		__sync_fetch_and_add(&renderer->counters.counter[OBSCURA_COUNTER_TYPE_SHADOW], 1);
 
-        occlusion = ObscuraTraceRay(scene, ray.position, ray.volume);
-        break;
-    default:
-        assert(false);
-        break;
-    }
+		occlusion = ObscuraTraceRay(scene, ray.position, ray.volume);
+		break;
+	default:
+		assert(false);
+		break;
+	}
 
-    return occlusion.collision.hit;
+	return occlusion.collision.hit;
 }
 
 static vec4

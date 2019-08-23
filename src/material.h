@@ -49,10 +49,10 @@ extern ObscuraSurfaceAttributes	ObscuraSurfaceAttrs	(ObscuraMaterial *, vec4);
 typedef struct ObscuraMaterialConstant {
 	struct __material_color_or_texture	emission;
 	struct __material_color_or_texture	reflective;
-	float			reflectivity;
+	float					reflectivity;
 	struct __material_color_or_texture	transparent;
-	float			transparency;
-	float			index_of_refraction;
+	float					transparency;
+	float					index_of_refraction;
 } ObscuraMaterialConstant;
 
 /*
@@ -66,10 +66,10 @@ typedef struct ObscuraMaterialPhong {
 	struct __material_color_or_texture	specular;
 	struct __material_color_or_texture	shininess;
 	struct __material_color_or_texture	reflective;
-	float			reflectivity;
+	float					reflectivity;
 	struct __material_color_or_texture	transparent;
-	float			transparency;
-	float			index_of_refraction;
+	float					transparency;
+	float					index_of_refraction;
 } ObscuraMaterialPhong;
 
 #ifdef __cplusplus
