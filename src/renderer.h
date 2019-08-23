@@ -5,7 +5,6 @@
 
 #include "collision.h"
 #include "memory.h"
-#include "stat.h"
 #include "tensor.h"
 #include "thread.h"
 #include "world.h"
@@ -43,8 +42,6 @@ extern void			ObscuraDestroyRendererRay	(ObscuraRendererRay **, ObscuraAllocatio
 extern ObscuraRendererRay *	ObscuraBindRay	(ObscuraRendererRay *, ObscuraRendererRayType, ObscuraAllocationCallbacks *);
 
 typedef struct ObscuraRenderer {
-	ObscuraCounters		counters;
-
 	ObscuraAllocationCallbacks	*allocator;
 	ObscuraExecutionCallbacks	*executor;
 

@@ -7,18 +7,20 @@
 extern "C" {
 #endif
 
-typedef enum ObscuraCounterType {
+typedef enum ObscuraPerfCounterType {
 	OBSCURA_COUNTER_TYPE_CAMERA,
 	OBSCURA_COUNTER_TYPE_REFLECTION,
 	OBSCURA_COUNTER_TYPE_REFRACTION,
 	OBSCURA_COUNTER_TYPE_SHADOW,
 
-	__COUNTER_TYPE_NUM_ELMS,
-} ObscuraCounterType;
+	OBSCURA_COUNTER_TYPE_RAY_GEOM_INTERSECT,
 
-typedef struct ObscuraCounters {
-	uint64_t	counter[__COUNTER_TYPE_NUM_ELMS];
-} ObscuraCounters;
+	__COUNTER_TYPE_NUM_ELMS,
+} ObscuraPerfCounterType;
+
+typedef uint64_t	ObscuraPerfCounters[__COUNTER_TYPE_NUM_ELMS];
+
+extern ObscuraPerfCounters	ObscuraCounters;
 
 #ifdef __cplusplus
 }

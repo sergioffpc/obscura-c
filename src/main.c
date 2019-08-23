@@ -26,9 +26,12 @@
 #include "camera.h"
 #include "renderer.h"
 #include "scene.h"
+#include "stat.h"
 #include "thread.h"
 #include "tensor.h"
 #include "world.h"
+
+ObscuraPerfCounters ObscuraCounters;
 
 static void
 sighandler(int signum __attribute__((unused)), siginfo_t *siginfo, void *context __attribute__((unused)))
@@ -177,7 +180,8 @@ loop(Display *display, Window window, ObscuraRenderer *renderer)
 		uint64_t frame_delta = ((t1.tv_sec - t0.tv_sec) * 1000000000 + (t1.tv_nsec - t0.tv_nsec)) / 1000000;
 
 		char *str = NULL;
-		if (asprintf(&str, "frame:%ld|time:%ldms", frame_count, frame_delta) != -1) {
+		if (asprintf(&str, "frame:%ld|time:%ldms|intersects:%ld",
+				frame_count, frame_delta, ObscuraCounters[OBSCURA_COUNTER_TYPE_RAY_GEOM_INTERSECT]) != -1) {
 			XGCValues gc_values = {
 				.foreground = 0x22ff00,
 			};
@@ -188,10 +192,10 @@ loop(Display *display, Window window, ObscuraRenderer *renderer)
 			free(str);
 		}
 		if (asprintf(&str, "camera:%ld|reflect:%ld|refract:%ld|shadow:%ld",
-				renderer->counters.counter[OBSCURA_COUNTER_TYPE_CAMERA],
-				renderer->counters.counter[OBSCURA_COUNTER_TYPE_REFLECTION],
-				renderer->counters.counter[OBSCURA_COUNTER_TYPE_REFRACTION],
-				renderer->counters.counter[OBSCURA_COUNTER_TYPE_SHADOW]) != -1) {
+				ObscuraCounters[OBSCURA_COUNTER_TYPE_CAMERA],
+				ObscuraCounters[OBSCURA_COUNTER_TYPE_REFLECTION],
+				ObscuraCounters[OBSCURA_COUNTER_TYPE_REFRACTION],
+				ObscuraCounters[OBSCURA_COUNTER_TYPE_SHADOW]) != -1) {
 			XGCValues gc_values = {
 				.foreground = 0x22ff00,
 			};

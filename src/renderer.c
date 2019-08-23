@@ -34,14 +34,14 @@ overcast(ObscuraRenderer *renderer, ObscuraLight *light, vec4 position, vec4 int
 	case OBSCURA_LIGHT_SOURCE_TYPE_AMBIENT:
 		break;
 	case OBSCURA_LIGHT_SOURCE_TYPE_DIRECTIONAL:
-		__sync_fetch_and_add(&renderer->counters.counter[OBSCURA_COUNTER_TYPE_SHADOW], 1);
+		__sync_fetch_and_add(&ObscuraCounters[OBSCURA_COUNTER_TYPE_SHADOW], 1);
 
 		bounds.direction = ((ObscuraLightDirectional *) light->source)->direction;
 
 		occlusion = ObscuraTraceRay(scene, ray.position, ray.volume);
 		break;
 	case OBSCURA_LIGHT_SOURCE_TYPE_POINT:
-		__sync_fetch_and_add(&renderer->counters.counter[OBSCURA_COUNTER_TYPE_SHADOW], 1);
+		__sync_fetch_and_add(&ObscuraCounters[OBSCURA_COUNTER_TYPE_SHADOW], 1);
 
 		bounds.direction = position - intersect;
 		bounds.direction = vec4_normalize(bounds.direction);
@@ -49,7 +49,7 @@ overcast(ObscuraRenderer *renderer, ObscuraLight *light, vec4 position, vec4 int
 		occlusion = ObscuraTraceRay(scene, ray.position, ray.volume);
 		break;
 	case OBSCURA_LIGHT_SOURCE_TYPE_SPOT:
-		__sync_fetch_and_add(&renderer->counters.counter[OBSCURA_COUNTER_TYPE_SHADOW], 1);
+		__sync_fetch_and_add(&ObscuraCounters[OBSCURA_COUNTER_TYPE_SHADOW], 1);
 
 		occlusion = ObscuraTraceRay(scene, ray.position, ray.volume);
 		break;
@@ -83,7 +83,7 @@ shade(ObscuraRenderer *renderer, ObscuraVisible *visible)
 static vec4
 cast(ObscuraRenderer *renderer, ObscuraRendererRay *ray)
 {
-	__sync_fetch_and_add(&renderer->counters.counter[OBSCURA_COUNTER_TYPE_CAMERA], 1);
+	__sync_fetch_and_add(&ObscuraCounters[OBSCURA_COUNTER_TYPE_CAMERA], 1);
 
 	ObscuraScene *scene = renderer->world->scene;
 	ObscuraVisible visible = ObscuraTraceRay(scene, ray->position, ray->volume);
@@ -263,7 +263,7 @@ ObscuraDestroyRenderer(ObscuraRenderer **ptr, ObscuraAllocationCallbacks *alloca
 void
 ObscuraDraw(ObscuraRenderer *renderer)
 {
-	explicit_bzero(&renderer->counters, sizeof(ObscuraCounters));
+	explicit_bzero(ObscuraCounters, sizeof(ObscuraPerfCounters));
 
 	renderer->lights_count = 0;
 	ObscuraTraverseScene(renderer->world->scene, &enumlights, renderer);

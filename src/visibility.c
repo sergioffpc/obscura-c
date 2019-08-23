@@ -1,5 +1,6 @@
 #include <assert.h>
 
+#include "stat.h"
 #include "visibility.h"
 
 struct trace_ray_info {
@@ -17,6 +18,8 @@ trace(ObscuraNode *node, void *arg)
 		ObscuraComponent *component = ObscuraFindAnyComponent(node, OBSCURA_COMPONENT_FAMILY_BOUNDING_VOLUME);
 		assert(component);
 		ObscuraBoundingVolume *volume = component->component;
+
+		__sync_fetch_and_add(&ObscuraCounters[OBSCURA_COUNTER_TYPE_RAY_GEOM_INTERSECT], 1);
 
 		ObscuraCollision collision = {};
 		ObscuraCollidesWith(info->ray, info->position, volume, node->position, &collision);
